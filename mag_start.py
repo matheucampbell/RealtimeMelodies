@@ -31,7 +31,7 @@ melody_rnn.initialize()
 
 # Model Parameters
 steps = 16
-tmp = 1.0  # Measure of the generation's "temperature". Higher = More scattered
+tmp = 1.0  # Measure of the generation's "temperature". Higher = More scattered/random
 
 # Initialize Generator
 gen_options = generator_pb2.GeneratorOptions()
