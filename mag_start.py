@@ -1,10 +1,10 @@
-import magenta
-import note_seq
-import tensorflow
+import magenta  # Google's ML for Art and Music Module
+import note_seq  # Serialized input for notes based on frequency and duration
+import tensorflow  # Generalized machine learning package
 
 print("Starting...")
 
-# Creating Sequence
+# Creating Sequence (Melody A: C# Minor 4/4)
 mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence object
 note_list = ((61, 0, 1), (61, 1, 1.5), (64, 1.5, 2), (66, 2, 2.5), (69, 2.5, 3),
              (68, 3, 4), (64, 4, 4.5), (66, 4.5, 5), (64, 5, 5.5), (63, 5.5, 6),
@@ -13,6 +13,8 @@ note_list = ((61, 0, 1), (61, 1, 1.5), (64, 1.5, 2), (66, 2, 2.5), (69, 2.5, 3),
 for note in  note_list:  # Add all the notes
     mel.notes.add(pitch=note[0], start_time=note[1], end_time=note[2],
                   velocity=80)
+
+mel.tempos.add(qpm=90)
 
 #  Convert note_seq to MIDI for storage and playback
 note_seq.sequence_proto_to_midi_file(mel, 'Input/in.mid')
