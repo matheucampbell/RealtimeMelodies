@@ -1,22 +1,29 @@
 from matplotlib import pyplot as plt
 import numpy as np
-import PyAudio
+import pyaudio
 import scipy
 
+cycle_num = 0
 CHUNKSIZE = 1024
-arr_data = np.zeroes()
+CYCLES = 2
+freq_data = None
 
 p = pyaudio.PyAudio()
 
-with p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True,
-            frames_per_buffer=CHUNKSIZE) as stream:
-  while True:
-    arr_data += np.frombuffer(stream.read(CHUNKSIZE), dtype=np.int16)
-    plt.plot(arr_data)
-    plt.show()
-    
-    fft = numpy.fft.fft(arr_data)
-    plt.plot(fft)
-    
+stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True,
+                frames_per_buffer=CHUNKSIZE)
 
+while cycle_num <= CYCLES:
+    cycle_num += 1
+    print(f"Cycle {cycle_num}")
+
+    new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
+    freq_data = np.hstack((freq_data, new))
+
+plt.plot(freq_data)
+plt.title("Raw Microphone Input")
+plt.savefig("Output/Waveform.png")
+
+stream.stop_stream()
+stream.close()
 p.terminate()
