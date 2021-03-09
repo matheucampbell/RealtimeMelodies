@@ -14,7 +14,7 @@ p = pyaudio.PyAudio()  # Initialize PyAudio object
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLINGRATE, input=True,
                 frames_per_buffer=CHUNKSIZE)  # Open stream with standard parameters
 
-while cycle_num < CYCLES:
+while cycle_num < CYCLES:  # Capture audio in chunks of size CHUNKSIZE for CYCLES cycles
     cycle_num += 1
     print(f"Cycle {cycle_num}")
 
