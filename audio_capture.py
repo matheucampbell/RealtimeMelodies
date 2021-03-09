@@ -1,9 +1,10 @@
-from matplotlib import pyplot as plt  # Data visualization module
+from matplotlib import pyplot as plt  # Data visualization
 import numpy as np  # Array operations/indexing
 import pyaudio  # Audio interface
+from sccipy.fft import fft, fftfreq  # Scientific functions
 
 cycle_num = 0  # Measures number of measurements of size CHUNKSIZE
-CHUNKSIZE = 1024  # Frames to capture
+CHUNKSIZE = 1024  # Frames to capture, 
 CYCLES = 9   # Number of cycles
 freq_data = None  # Variable to store microphone input
 
@@ -23,6 +24,15 @@ while cycle_num < CYCLES:
 plt.plot(freq_data)
 plt.title("Raw Microphone Input")
 plt.savefig("Output/Waveform.png")
+
+n = CHUNKSIZE * CYCLES
+
+yf = fft(freq_data)
+xf = fftfreq(n, 1/44100)
+
+plt.plot(xf, np.abs(yf))
+plt.title("Fast Fourier Transform")
+plt.savefig("Output/FastFourierTransform.png")
 
 # Cleanup
 stream.stop_stream()
