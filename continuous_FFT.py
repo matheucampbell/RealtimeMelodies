@@ -32,7 +32,6 @@ def calculate_peak(waves, chunksize, sampling_rate):
 
 def hz_to_note(freq):
     midi_num = round((12*math.log((freq/440), 2) + 69))
-    seq.append(midi_num)
     return midi_num
 
 
@@ -52,19 +51,15 @@ while cycles < CYCLE_MAX:
             data = True
 
         cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
-        cumu_peak = calculate_peak(freq_data, CHUNKSIZE*(cycles + 1),
-                                   SAMPLING_RATE)
-
+        midi = hz_to_note(cur_peak)
+        seq.append(midi)
+        
         print(f"Current: {str(cur_peak)} Hz\n" +
               f"MIDI Number: {str(hz_to_note(cur_peak))[:4]}")
-        # print(f"Cumulative: {str(cumu_peak)} Hz")
-
-        if freq_data.size != CHUNKSIZE:
-            peak_diff = round(abs(cur_peak - last_peak), 2)
-            print(f"Peak Difference: {str(peak_diff)}")
+        
 
         print("\n")
-        last_peak = cur_peak
+        last_midi = midi
         cycles += 1
 
     except KeyboardInterrupt:
