@@ -3,12 +3,14 @@ import math
 import numpy as np  # Array operations/indexing
 import pyaudio  # Audio interface
 from scipy.fft import rfft, rfftfreq  # Scientific functions
+import sys
 
 data = False
 cycles = 0
 seq = []
 
-CHUNKSIZE = int(22050/4)  # Frames to capture
+CHUNK_DURATION = sys.argv[0]
+CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CYCLE_MAX = 75
 
@@ -25,7 +27,7 @@ def calculate_peak(waves, chunksize, sampling_rate):
     xf = rfftfreq(waves.size, 1/sampling_rate)
 
     peak = np.where(np.abs(yf) == np.abs(yf).max())[0][0]
-    peak = round((peak / ((chunksize)/sampling_rate)), 2)
+    peak = round((peak/((chunksize)/sampling_rate)), 2)
 
     return peak
 
@@ -35,8 +37,8 @@ def hz_to_note(freq):
     return midi_num
 
 
-print(f"Recording {str((CHUNKSIZE*CYCLE_MAX)/44100)} seconds of audio in " +
-      f"{str(CHUNKSIZE/SAMPLING_RATE)} second chunks.\n")
+print(f"Recording {str(round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE), 2)} seconds "
+      f"of audio in {str(round(CHUNKSIZE/SAMPLING_RATE), 2)} second chunks.\n")
 
 while cycles < CYCLE_MAX:
     try:
