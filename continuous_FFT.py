@@ -1,3 +1,4 @@
+from decimal import Decimal
 from matplotlib import pyplot as plt  # Data visualization
 import math
 import numpy as np  # Array operations/indexing
@@ -9,12 +10,18 @@ data = False
 cycles = 0
 seq = []
 
-CHUNK_DURATION = sys.argv[0]
-CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture
+CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration
+DURATION = float(sys.argv[2])  # Argument defines total duration
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
-CYCLE_MAX = 75
+CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture
+CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
+
+print(f"Recording {str(round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE, 2))} seconds "
+      f"of audio in {str(round(CHUNKSIZE/SAMPLING_RATE, 2))} second chunks.\n")
+
+input("Press enter to proceed.")
 
 # Open stream with standard parameters
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
@@ -37,9 +44,6 @@ def hz_to_note(freq):
     return midi_num
 
 
-print(f"Recording {str(round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE), 2)} seconds "
-      f"of audio in {str(round(CHUNKSIZE/SAMPLING_RATE), 2)} second chunks.\n")
-
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
@@ -55,10 +59,10 @@ while cycles < CYCLE_MAX:
         cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
         midi = hz_to_note(cur_peak)
         seq.append(midi)
-        
+
         print(f"Current: {str(cur_peak)} Hz\n" +
               f"MIDI Number: {str(hz_to_note(cur_peak))[:4]}")
-        
+
 
         print("\n")
         last_midi = midi
