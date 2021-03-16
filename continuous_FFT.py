@@ -63,6 +63,7 @@ class Note:  # Note object to store input for note_seq
 
             return self
 
+      
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
