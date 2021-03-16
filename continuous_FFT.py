@@ -19,8 +19,8 @@ last_midi = None
 CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
 DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
-CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture
-CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE
+CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
+CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE  # Total number of cycles to capture
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -45,12 +45,12 @@ def calculate_peak(waves, chunksize, sampling_rate):
     return peak
 
 
-def hz_to_note(freq):
+def hz_to_note(freq):  # Converts frequencies to MIDI values
     midi_num = round((12*math.log((freq/440), 2) + 69))
     return midi_num
 
 
-class Note:
+class Note:  # Note object to store input for note_seq
       def __init__(self, midi_num, start_time, finished, end_time=None):
             self.midi = midi_num
             self.start = start_time
@@ -66,9 +66,9 @@ while cycles < CYCLE_MAX:
         # Reads stream and converts from bytes to amplitudes
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
-        if data:
+        if data:  # Stacks onto previous data if necessary
             freq_data = np.hstack((freq_data, new))  # Adds new chunk
-            peak_diff = 0
+            
         else:
             freq_data = new
             data = True
@@ -85,6 +85,9 @@ while cycles < CYCLE_MAX:
             final_seq = [note.finalize(cycles, CHUNK_DURATION) for note in final_seq 
                          if not note.finished]
             final_seq.append(new_note)
+            
+            if cycles = CYCLE_MAX - 1:
+                  final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
         cycles += 1
