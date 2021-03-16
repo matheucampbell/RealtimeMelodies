@@ -101,10 +101,6 @@ while cycles < CYCLE_MAX:
     except KeyboardInterrupt:
         break
 
-print(len(final_seq))
-for note in final_seq:
-    print(note.midi, note.start, note.end)
-# Creating Sequence (Melody A: C# Minor 4/4)
 mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence object
 
 for note in  final_seq:  # Add all the notes
@@ -119,4 +115,3 @@ stream.close()
 p.terminate()
 
 print("MIDI Sequence: ", seq)
-print("Target Sequence: ", [61, 64, 66, 69, 68, 64, 66, 64, 63, 61, 60])
