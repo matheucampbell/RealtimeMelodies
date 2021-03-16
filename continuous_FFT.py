@@ -1,14 +1,20 @@
 from decimal import Decimal
 from matplotlib import pyplot as plt  # Data visualization
+
+import magenta  # Google's ML for Art and Music Module
 import math
 import numpy as np  # Array operations/indexing
+import note_seq  # Serialized input for notes based on frequency and duration
 import pyaudio  # Audio interface
 from scipy.fft import rfft, rfftfreq  # Scientific functions
 import sys
+import tensorflow  # Generalized machine learning package
 
 data = False
 cycles = 0
 seq = []
+final_seq = seq
+last_midi = None
 
 CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
 DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
@@ -43,7 +49,18 @@ def hz_to_note(freq):
     midi_num = round((12*math.log((freq/440), 2) + 69))
     return midi_num
 
-    
+
+class Note:
+      def __init__(self, midi_num, start_time, finished, end_time=None):
+            self.midi = midi_num
+            self.start = start_time
+            self.end = end_time
+            self.finished = finished
+      
+      def finalize(cycles, chunk_seconds):
+            self.end = (cycles) * chunk_seconds
+            self.finished = True
+            
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
@@ -62,18 +79,27 @@ while cycles < CYCLE_MAX:
 
         print(f"Current: {str(cur_peak)} Hz\n" +
               f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
-        
-        if midi == last_midi:
-            new_note = False
             
-        else:
-            # new_note = (midi, start_time
-      
+        if last_midi != midi:  # If note changes, finalize previous note, start new
+            new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
+            final_seq = [note.finalize(cycles, CHUNK_DURATION) for note in final_seq 
+                         if not note.finished]
+            final_seq.append(new_note)
+
         last_midi = midi
         cycles += 1
 
     except KeyboardInterrupt:
         break
+
+# Creating Sequence (Melody A: C# Minor 4/4)
+mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence object
+
+for note in  final_seq:  # Add all the notes
+    mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
+                  velocity=80)
+
+note_seq.sequence_proto_to_midi_file(mel, 'Output/test_out.mid')
 
 # Cleanup
 stream.stop_stream()
