@@ -1,12 +1,12 @@
 from decimal import Decimal
 from matplotlib import pyplot as plt  # Data visualization
+from scipy.fft import rfft, rfftfreq  # Scientific functions
 
 import magenta  # Google's ML for Art and Music Module
 import math
 import numpy as np  # Array operations/indexing
 import note_seq  # Serialized input for notes based on frequency and duration
 import pyaudio  # Audio interface
-from scipy.fft import rfft, rfftfreq  # Scientific functions
 import sys
 import tensorflow  # Generalized machine learning package
 
