@@ -10,8 +10,8 @@ data = False
 cycles = 0
 seq = []
 
-CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration
-DURATION = float(sys.argv[2])  # Argument defines total duration
+CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
+DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture
 CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE
