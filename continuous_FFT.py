@@ -13,7 +13,7 @@ import tensorflow  # Generalized machine learning package
 data = False
 cycles = 0
 seq = []
-final_seq = seq
+final_seq = []
 last_midi = None
 
 CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
@@ -56,11 +56,13 @@ class Note:  # Note object to store input for note_seq
             self.start = start_time
             self.end = end_time
             self.finished = finished
-      
-      def finalize(cycles, chunk_seconds):
+
+      def finalize(self, cycles, chunk_seconds):
             self.end = (cycles) * chunk_seconds
             self.finished = True
-            
+
+            return self
+
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
@@ -68,7 +70,7 @@ while cycles < CYCLE_MAX:
 
         if data:  # Stacks onto previous data if necessary
             freq_data = np.hstack((freq_data, new))  # Adds new chunk
-            
+
         else:
             freq_data = new
             data = True
@@ -79,15 +81,19 @@ while cycles < CYCLE_MAX:
 
         print(f"Current: {str(cur_peak)} Hz\n" +
               f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
-            
-        if last_midi != midi:  # If note changes, finalize previous note, start new
+
+        if last_midi != midi or not cycles:  # Finalize previous note, start new
             new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
-            final_seq = [note.finalize(cycles, CHUNK_DURATION) for note in final_seq 
-                         if not note.finished]
+
+            if final_seq:
+                prev = next(note for note in final_seq if not note.finished)
+                prev.finalize(cycles, CHUNK_DURATION)
+
             final_seq.append(new_note)
-            
-            if cycles = CYCLE_MAX - 1:
-                  final_seq[-1].finalize(cycles, CHUNK_DURATION)
+
+            if cycles == CYCLE_MAX - 1:
+                print("LAST CYCLE")
+                final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
         cycles += 1
@@ -95,6 +101,9 @@ while cycles < CYCLE_MAX:
     except KeyboardInterrupt:
         break
 
+print(len(final_seq))
+for note in final_seq:
+    print(note.midi, note.start, note.end)
 # Creating Sequence (Melody A: C# Minor 4/4)
 mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence object
 
