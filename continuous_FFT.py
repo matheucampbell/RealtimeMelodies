@@ -43,7 +43,7 @@ def hz_to_note(freq):
     midi_num = round((12*math.log((freq/440), 2) + 69))
     return midi_num
 
-
+    
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
@@ -61,10 +61,14 @@ while cycles < CYCLE_MAX:
         seq.append(midi)
 
         print(f"Current: {str(cur_peak)} Hz\n" +
-              f"MIDI Number: {str(hz_to_note(cur_peak))[:4]}")
-
-
-        print("\n")
+              f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
+        
+        if midi == last_midi:
+            new_note = False
+            
+        else:
+            # new_note = (midi, start_time
+      
         last_midi = midi
         cycles += 1
 
