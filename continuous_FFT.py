@@ -12,8 +12,8 @@ import tensorflow  # Generalized machine learning package
 
 data = False
 cycles = 0
-seq = []
-final_seq = []
+seq = []  # To store sequence of MIDI numbers
+final_seq = []  # To store Note objects for MIDI
 last_midi = None
 
 CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
@@ -60,7 +60,7 @@ class Note:  # Note object to store input for note_seq
       def finalize(self, cycles, chunk_seconds):
             self.end = (cycles) * chunk_seconds
             self.finished = True
-
+            
             return self
 
       
@@ -92,9 +92,9 @@ while cycles < CYCLE_MAX:
 
             final_seq.append(new_note)
 
-            if cycles == CYCLE_MAX - 1:
-                print("LAST CYCLE")
-                final_seq[-1].finalize(cycles, CHUNK_DURATION)
+      if cycles == CYCLE_MAX - 1:
+          print("LAST CYCLE")
+          final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
         cycles += 1
