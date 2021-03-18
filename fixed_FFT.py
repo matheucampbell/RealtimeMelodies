@@ -17,7 +17,7 @@ seq = []  # To store sequence of MIDI numbers
 final_seq = []  # To store Note objects for MIDI
 last_midi = None
 
-FILEPATH = sys.arv[1]  # Filepath of file to read
+FILEPATH = sys.argv[1]  # Filepath of file to read
 CHUNK_DURATION = float(sys.argv[2])  # Argument defines chunk duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
@@ -31,8 +31,8 @@ stream = p.open(format=p.get_format_from_width(clip.getsampwidth()),
                 rate=clip.getframerate(),
                 input=True,
                 frames_per_buffer=CHUNKSIZE)
-DURATION = clip.getnframes / clip.getframerate()
-CYCLE_MAX = (clip.getnframes())/CHUNKSIZE  # Total number of cycles to capture
+DURATION = clip.getnframes() / clip.getframerate()
+CYCLE_MAX = clip.getnframes() / CHUNKSIZE  # Total number of cycles to capture
 
 input("Press enter to proceed.")
 
