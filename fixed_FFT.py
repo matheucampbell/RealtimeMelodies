@@ -95,7 +95,6 @@ while cycles < CYCLE_MAX:
             final_seq.append(new_note)
 
       if cycles == CYCLE_MAX - 1:
-          print("LAST CYCLE")
           final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
@@ -113,6 +112,7 @@ for note in  final_seq:  # Add all the notes
 note_seq.sequence_proto_to_midi_file(mel, 'Output/test_out.mid')
 
 # Cleanup
+wave.close()
 stream.stop_stream()
 stream.close()
 p.terminate()
