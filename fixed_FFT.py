@@ -9,6 +9,7 @@ import note_seq  # Serialized input for notes based on frequency and duration
 import pyaudio  # Audio interface
 import sys
 import tensorflow  # Generalized machine learning package
+import wave
 
 data = False
 cycles = 0
@@ -16,23 +17,24 @@ seq = []  # To store sequence of MIDI numbers
 final_seq = []  # To store Note objects for MIDI
 last_midi = None
 
-CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
-DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
+FILEPATH = sys.arv[1]  # Filepath of file to read
+CHUNK_DURATION = float(sys.argv[2])  # Argument defines chunk duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE  # Total number of cycles to capture
 
+clip = wave.open(FILEPATH, 'rb')
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
-print(f"Recording {str(round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE, 2))} seconds "
-      f"of audio in {str(round(CHUNKSIZE/SAMPLING_RATE, 2))} second chunks.\n")
+# Open stream with standard parameters
+stream = p.open(format=p.get_format_from_width(clip.getsampwidth()), 
+                channels=clip.getnchannels(),
+                rate=clip.getframerate(),
+                input=True,
+                frames_per_buffer=CHUNKSIZE)
+DURATION = clip.getnframes / clip.getframerate()
+CYCLE_MAX = (clip.getnframes())/CHUNKSIZE  # Total number of cycles to capture
 
 input("Press enter to proceed.")
-
-# Open stream with standard parameters
-stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
-                input=True, frames_per_buffer=CHUNKSIZE)
-
 
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate):
