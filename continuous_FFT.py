@@ -7,8 +7,10 @@ import math
 import numpy as np  # Array operations/indexing
 import note_seq  # Serialized input for notes based on frequency and duration
 import pyaudio  # Audio interface
+import pretty_midi  # MIDI interface
 import sys
 import tensorflow  # Generalized machine learning package
+import visual_midi  # MIDI visualization
 
 data = False
 cycles = 0
@@ -20,7 +22,7 @@ CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in second
 DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-CYCLE_MAX = (SAMPLING_RATE*DURATION)/CHUNKSIZE  # Total number of cycles to capture
+CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles to capture
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -50,23 +52,67 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
     return midi_num
 
 
-def post_process(midi_seq):  # Correct errors in interpretation
+def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
+    def find_mistake(prev, current, next, duration, min_duration):
+        check_1 = False
+        check_2 = False
+        check_3 = False
+
+        if duration <= min_duration:
+            check_1 = True
+
+        if prev == next:
+            check_2 = True
+
+        if (current - prev) % 12 == 0 or abs(current - prev) < 1:
+            check_3 = True
+
+        if check_1 and check_2 and check_3:
+            print(f"Possible error changed: {prev}, {current}, {next}")
+            return True
+        else:
+            return False
+
     for note in midi_seq:
         place = midi_seq.index(note)
-        current = midi_seq[place].midi
-        pre_midi = midi_seq[place-1].midi
-        post_midi = midi_seq[place+1].midi
-        
-        # If a note is the same note, but a different octave
-        # from the two notes flanking it (which are the same), 
-        # change the middle note to the flanking notes.
-        if pre_midi == post_midi and (current - pre_midi) % 12 == 0:
-            current = pre_midi
-            midi_seq[place].end = post_midi.end
-            midi_seq.remove(midi_seq[place])
-        
-        if pre_midi == post_midi and pre_midi != current:
-            current = pre_midi
+
+        if len(midi_seq) - 1 == place:
+            last = True
+        else:
+            last = False
+
+        cur_note = midi_seq[place]
+
+
+        duration = cur_note.end - cur_note.start
+        cur_midi = cur_note.midi  # MIDI number of current note
+
+        if place != 0 and not last:
+            pre_midi = midi_seq[place-1].midi  # MIDI number of previous note
+            next_midi = midi_seq[place+1].midi  # MIDI number of next note
+            prev_note = midi_seq[place-1]
+            next_note = midi_seq[place+1]
+        elif place == 0:
+            pre_midi = cur_note.midi
+            next_midi = midi_seq[place+1].midi
+            prev_note = cur_note
+            next_note = midi_seq[place+1]
+        elif last:
+            pre_midi = midi_seq[place-1].midi
+            next_midi = cur_note.midi
+            prev_note = midi_seq[place-1]
+            next_note = cur_note
+
+        if not last:
+            if find_mistake(pre_midi, cur_midi, next_midi, duration, min_duration):
+                midi_seq[place-1].end = midi_seq[place+1].end
+                midi_seq.remove(cur_note)
+                midi_seq.remove(midi_seq[place+1])
+
+                return midi_seq, last
+
+    return midi_seq, last
+
 
 
 class Note:  # Note object to store input for note_seq
@@ -79,10 +125,10 @@ class Note:  # Note object to store input for note_seq
     def finalize(self, cycles, chunk_seconds):
         self.end = (cycles) * chunk_seconds
         self.finished = True
-            
+
         return self
 
-      
+
 while cycles < CYCLE_MAX:
     try:
         # Reads stream and converts from bytes to amplitudes
@@ -111,8 +157,9 @@ while cycles < CYCLE_MAX:
 
             final_seq.append(new_note)
 
-      if cycles == CYCLE_MAX - 1:
-          final_seq[-1].finalize(cycles, CHUNK_DURATION)
+
+        if cycles == CYCLE_MAX - 1:
+            final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
         cycles += 1
@@ -120,13 +167,31 @@ while cycles < CYCLE_MAX:
     except KeyboardInterrupt:
         break
 
-mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence object
+pre_seq = final_seq.copy()
 
-for note in  final_seq:  # Add all the notes
-    mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
-                  velocity=80)
+while not process_MIDI(final_seq, CHUNKSIZE)[1]:
+    final_seq = process_MIDI(final_seq, CHUNKSIZE)[0]
 
-note_seq.sequence_proto_to_midi_file(mel, 'Output/test_out.mid')
+pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
+post_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
+
+for note in pre_seq:  # Add all the notes
+    pre_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
+                      velocity=80)
+
+for note in final_seq:  # Add all the notes
+    post_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
+                      velocity=80)
+
+note_seq.sequence_proto_to_midi_file(pre_mel, 'Output/pre_out.mid')
+note_seq.sequence_proto_to_midi_file(post_mel, 'Output/post_out.mid')
+
+# Plot MIDI Sequences
+pre = pretty_midi.PrettyMIDI('Output/pre_out.mid')
+post = pretty_midi.PrettyMIDI('Output/post_out.mid')
+
+visual_midi.Plotter().save(pre, 'Output/pre_plotted.html')
+visual_midi.Plotter().save(post, 'Output/post_plotted.html')
 
 # Cleanup
 stream.stop_stream()
