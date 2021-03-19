@@ -57,6 +57,7 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
         check_1 = False
         check_2 = False
         check_3 = False
+        check_4 = False
 
         if duration <= min_duration:
             check_1 = True
@@ -67,7 +68,10 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
         if (current - prev) % 12 == 0 or abs(current - prev) < 1:
             check_3 = True
 
-        if check_1 and check_2 and check_3:
+        if abs(current - prev) > 18 or abs(current - next) > 18:
+            check_4 = True
+
+        if check_1 and check_2 and check_3 or check_4:
             print(f"Possible error changed: {prev}, {current}, {next}")
             return True
         else:
@@ -108,6 +112,7 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
                 midi_seq[place-1].end = midi_seq[place+1].end
                 midi_seq.remove(cur_note)
                 midi_seq.remove(midi_seq[place+1])
+                print(f"Start: {cur_note.start}")
 
                 return midi_seq, last
 
@@ -130,42 +135,46 @@ class Note:  # Note object to store input for note_seq
 
 
 while cycles < CYCLE_MAX:
-    try:
-        # Reads stream and converts from bytes to amplitudes
-        new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
+    # Reads stream and converts from bytes to amplitudes
+    new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
-        if data:  # Stacks onto previous data if necessary
-            freq_data = np.hstack((freq_data, new))  # Adds new chunk
+    if new.max() <= 5000:
+        if last_midi:
+            prev = next(note for note in final_seq if not note.finished)
+            prev.finalize(cycles, CHUNK_DURATION)
 
-        else:
-            freq_data = new
-            data = True
-
-        cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
-        midi = hz_to_note(cur_peak)
-        seq.append(midi)
-
-        print(f"Current: {str(cur_peak)} Hz\n" +
-              f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
-
-        if last_midi != midi or not cycles:  # Finalize previous note, start new
-            new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
-
-            if final_seq:
-                prev = next(note for note in final_seq if not note.finished)
-                prev.finalize(cycles, CHUNK_DURATION)
-
-            final_seq.append(new_note)
-
-
-        if cycles == CYCLE_MAX - 1:
-            final_seq[-1].finalize(cycles, CHUNK_DURATION)
-
-        last_midi = midi
         cycles += 1
+        last_midi = None
+        continue
 
-    except KeyboardInterrupt:
-        break
+    if data:  # Stacks onto previous data if necessary
+        freq_data = np.hstack((freq_data, new))  # Adds new chunk
+
+    else:
+        freq_data = new
+        data = True
+
+    cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
+    midi = hz_to_note(cur_peak)
+    seq.append(midi)
+
+    print(f"Current: {str(cur_peak)} Hz\n" +
+          f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
+
+    if last_midi != midi or not cycles:  # Finalize previous note, start new
+        new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
+
+        if final_seq and last_midi:
+            prev = next(note for note in final_seq if not note.finished)
+            prev.finalize(cycles, CHUNK_DURATION)
+
+        final_seq.append(new_note)
+
+    if cycles == CYCLE_MAX - 1:
+        final_seq[-1].finalize(cycles, CHUNK_DURATION)
+
+    last_midi = midi
+    cycles += 1
 
 pre_seq = final_seq.copy()
 
@@ -198,4 +207,4 @@ stream.stop_stream()
 stream.close()
 p.terminate()
 
-print("MIDI Sequence: ", seq)
+print("\nMIDI Sequence: ", seq)
