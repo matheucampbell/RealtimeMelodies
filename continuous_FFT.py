@@ -50,18 +50,21 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
     return midi_num
 
 
+def post_process(midi_seq):  # Correct errors in interpretation
+    pass
+      
 class Note:  # Note object to store input for note_seq
-      def __init__(self, midi_num, start_time, finished, end_time=None):
-            self.midi = midi_num
-            self.start = start_time
-            self.end = end_time
-            self.finished = finished
+    def __init__(self, midi_num, start_time, finished, end_time=None):
+        self.midi = midi_num
+        self.start = start_time
+        self.end = end_time
+        self.finished = finished
 
-      def finalize(self, cycles, chunk_seconds):
-            self.end = (cycles) * chunk_seconds
-            self.finished = True
+    def finalize(self, cycles, chunk_seconds):
+        self.end = (cycles) * chunk_seconds
+        self.finished = True
             
-            return self
+        return self
 
       
 while cycles < CYCLE_MAX:
