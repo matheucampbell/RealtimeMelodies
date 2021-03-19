@@ -51,8 +51,24 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
 
 
 def post_process(midi_seq):  # Correct errors in interpretation
-    pass
-      
+    for note in midi_seq:
+        place = midi_seq.index(note)
+        current = midi_seq[place].midi
+        pre_midi = midi_seq[place-1].midi
+        post_midi = midi_seq[place+1].midi
+        
+        # If a note is the same note, but a different octave
+        # from the two notes flanking it (which are the same), 
+        # change the middle note to the flanking notes.
+        if pre_midi == post_midi and (current - pre_midi) % 12 == 0:
+            current = pre_midi
+            midi_seq[place].end = post_midi.end
+            midi_seq.remove(midi_seq[place])
+        
+        if pre_midi == post_midi and pre_midi != current:
+            current = pre_midi
+
+
 class Note:  # Note object to store input for note_seq
     def __init__(self, midi_num, start_time, finished, end_time=None):
         self.midi = midi_num
@@ -96,7 +112,6 @@ while cycles < CYCLE_MAX:
             final_seq.append(new_note)
 
       if cycles == CYCLE_MAX - 1:
-          print("LAST CYCLE")
           final_seq[-1].finalize(cycles, CHUNK_DURATION)
 
         last_midi = midi
