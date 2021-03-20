@@ -15,7 +15,7 @@ import visual_midi  # MIDI visualization
 data = False
 cycles = 0
 seq = []  # To store sequence of MIDI numbers
-final_seq = []  # To store Note objects for MIDI
+pre_seq = []  # To store Note objects for MIDI
 last_midi = None
 
 CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
@@ -68,7 +68,7 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
         if (current - prev) % 12 == 0 or abs(current - prev) < 1:
             check_3 = True
 
-        if abs(current - prev) > 18 or abs(current - next) > 18:
+        if abs(current - prev) > 14 or abs(current - next) > 14:
             check_4 = True
 
         if check_1 and check_2 and check_3 or check_4:
@@ -86,8 +86,6 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
             last = False
 
         cur_note = midi_seq[place]
-
-
         duration = cur_note.end - cur_note.start
         cur_midi = cur_note.midi  # MIDI number of current note
 
@@ -110,8 +108,8 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
         if not last:
             if find_mistake(pre_midi, cur_midi, next_midi, duration, min_duration):
                 midi_seq[place-1].end = midi_seq[place+1].end
-                midi_seq.remove(cur_note)
                 midi_seq.remove(midi_seq[place+1])
+                midi_seq.remove(cur_note)
                 print(f"Start: {cur_note.start}")
 
                 return midi_seq, last
@@ -138,21 +136,26 @@ while cycles < CYCLE_MAX:
     # Reads stream and converts from bytes to amplitudes
     new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
-    if new.max() <= 5000:
-        if last_midi:
-            prev = next(note for note in final_seq if not note.finished)
-            prev.finalize(cycles, CHUNK_DURATION)
-
-        cycles += 1
-        last_midi = None
-        continue
-
     if data:  # Stacks onto previous data if necessary
         freq_data = np.hstack((freq_data, new))  # Adds new chunk
 
     else:
         freq_data = new
         data = True
+
+    if new.max() <= 8000:
+        if last_midi:
+            prev = next(note for note in pre_seq if not note.finished)
+            prev.finalize(cycles, CHUNK_DURATION)
+
+        if cycles == CYCLE_MAX - 1:
+            pre_seq[-1].finalize(cycles, CHUNK_DURATION)
+
+        cycles += 1
+        last_midi = None
+        seq.append(None)
+        print("Rest\n")
+        continue
 
     cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
     midi = hz_to_note(cur_peak)
@@ -161,28 +164,36 @@ while cycles < CYCLE_MAX:
     print(f"Current: {str(cur_peak)} Hz\n" +
           f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
 
-    if last_midi != midi or not cycles:  # Finalize previous note, start new
+    if last_midi != midi:  # Finalize previous note, start new
         new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
 
-        if final_seq and last_midi:
-            prev = next(note for note in final_seq if not note.finished)
+        if pre_seq and last_midi:
+            prev = next(note for note in pre_seq if not note.finished)
             prev.finalize(cycles, CHUNK_DURATION)
 
-        final_seq.append(new_note)
+        pre_seq.append(new_note)
 
     if cycles == CYCLE_MAX - 1:
-        final_seq[-1].finalize(cycles, CHUNK_DURATION)
+        pre_seq[-1].finalize(cycles, CHUNK_DURATION)
 
     last_midi = midi
     cycles += 1
 
-pre_seq = final_seq.copy()
+final_seq = pre_seq.copy()
 
-while not process_MIDI(final_seq, CHUNKSIZE)[1]:
-    final_seq = process_MIDI(final_seq, CHUNKSIZE)[0]
+for note in pre_seq:
+    print(note.midi, note.start, note.end)
+
+res = process_MIDI(final_seq, CHUNKSIZE)
+while not res[1]:
+    res = process_MIDI(res[0], CHUNKSIZE)
+final_seq = res[0]
+
+for note in pre_seq:
+    print(note.midi, note.start, note.end)
 
 pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
-post_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
+post_mel = note_seq.protobuf.music_pb2.NoteSequence()
 
 for note in pre_seq:  # Add all the notes
     pre_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
@@ -208,3 +219,29 @@ stream.close()
 p.terminate()
 
 print("\nMIDI Sequence: ", seq)
+
+# Import Dependencies
+from magenta.models.melody_rnn import melody_rnn_sequence_generator
+from magenta.models.shared import sequence_generator_bundle
+from note_seq.protobuf import generator_pb2
+from note_seq.protobuf import music_pb2
+
+# Initialize Model
+bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
+generator_map = melody_rnn_sequence_generator.get_generator_map()
+melody_rnn = generator_map['basic_rnn'](checkpoint=None, bundle=bundle)
+melody_rnn.initialize()
+
+# Model Parameters
+steps = 16
+tmp = 1.0
+
+# Initialize Generator
+gen_options = generator_pb2.GeneratorOptions()
+gen_options.args['temperature'].float_value = tmp
+gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
+                                                end_time=(final_seq[-1].end - final_seq[1].start) * 2)
+
+out = melody_rnn.generate(post_mel, gen_options)
+
+note_seq.sequence_proto_to_midi_file(out, 'Output/ext_out.mid')
