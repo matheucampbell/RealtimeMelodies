@@ -13,22 +13,28 @@ import sys
 import tensorflow  # Generalized machine learning package
 import visual_midi  # MIDI visualization
 
-data = False
-cycles = 0
-seq = []  # To store sequence of MIDI numbers
-pre_seq = []  # To store Note objects for MIDI
-last_midi = None
+# Magenta Dependencies
+from magenta.models.melody_rnn import melody_rnn_sequence_generator
+from magenta.models.shared import sequence_generator_bundle
+from note_seq.protobuf import generator_pb2
+from note_seq.protobuf import music_pb2
 
-CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in sec
-DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
+data = False  # Whether or not any audio data has been collected
+cycles = 0  # Number of cycles completed
+seq = []  # To store sequence of MIDI numbers
+pre_seq = []  # To store Note objects for MIDI processing
+last_midi = None  # Stores value of last note; NONE if rest or just starting
+
+CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
+DURATION = round(float(sys.argv[2]), 3)  # Defines total duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
-print(f"Recording {str(round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE, 2))} seconds "
-      f"of audio in {str(round(CHUNKSIZE/SAMPLING_RATE, 2))} second chunks.\n")
+print(f"Recording {round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE, 2)} seconds "
+      f"of audio in {round(CHUNKSIZE/SAMPLING_RATE, 2)} second chunks.\n")
 
 input("Press enter to proceed.")
 
@@ -47,89 +53,88 @@ def calculate_peak(waves, chunksize, sampling_rate):
 
     return peak
 
-
 def hz_to_note(freq):  # Converts frequencies to MIDI values
     midi_num = round((12*math.log((freq/440), 2) + 69))
     return midi_num
 
-
-def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
-    def find_mistake(prev, current, next, duration, min_duration):
+# Removes notes whose adjacent notes are the same when the given note is the
+# minimum duration long and meets a removal criteria.
+# Removal Criteria:
+#     - Same octave as adjacent notes
+#     - Extreme distance from adjacent notes ( > 14 semitones))
+#     - Only one semitone from adjacent notes
+def process_MIDI(midi_seq, min_duration):
+    def find_mistake(prev, current, next, min_dur):
         check_1 = False
         check_2 = False
         check_3 = False
         check_4 = False
 
-        if duration <= min_duration:
+        if (current.end - current.start) <= min_dur:
             check_1 = True
 
-        if prev == next:
+        if prev.midi == next.midi:
             check_2 = True
 
-        if (current - prev) % 12 == 0 or abs(current - prev) == 1:
+        if (current.midi - prev.midi) % 12 == 0 or\
+           abs(current.midi - prev.midi) == 1:
             check_3 = True
 
-        if abs(current - prev) > 14 or abs(current - next) > 14:
+        if abs(current.midi - prev.midi) > 12 or\
+           abs(current.midi - next.midi) > 12:
             check_4 = True
 
         if check_1 and check_2 and check_3 or check_4:
-            print(f"Possible error changed: {prev}, {current}, {next}")
+            print("Possible error changed:" +
+                  f"{prev.midi}, {current.midi}, {next.midi}")
             return True
         else:
             return False
 
-    for note in midi_seq:
-        place = midi_seq.index(note)
+    for cur_note in midi_seq:
+        print(f"Checking: {cur_note.midi}, {cur_note.start}, {cur_note.end}")
+        prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
+        next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
 
-        if len(midi_seq) - 1 == place:
-            last = True
-        else:
-            last = False
+        if not prev_note and next_note:
+            prev_note = Note(next_note.midi, cur_note.start, cur_note.end,
+                             finished=True, temporary=True)
+            midi_seq.append(prev_note)
 
-        cur_note = midi_seq[place]
-        duration = cur_note.end - cur_note.start
-        cur_midi = cur_note.midi  # MIDI number of current note
+        elif not next_note and prev_note:
+            next_note = Note(prev_note.midi, cur_note.start, cur_note.end,
+                             finished=True, temporary=True)
+            midi_seq.append(next_note)
 
-        if place != 0 and not last:
-            pre_midi = midi_seq[place-1].midi  # MIDI number of previous note
-            next_midi = midi_seq[place+1].midi  # MIDI number of next note
-            prev_note = midi_seq[place-1]
-            next_note = midi_seq[place+1]
-        elif place == 0:
-            pre_midi = cur_note.midi
-            next_midi = midi_seq[place+1].midi
-            prev_note = cur_note
-            next_note = midi_seq[place+1]
-        elif last:
-            pre_midi = midi_seq[place-1].midi
-            next_midi = cur_note.midi
-            prev_note = midi_seq[place-1]
-            next_note = cur_note
+        elif not prev_note and not next_note:
+            continue
 
-        if not last and place:
-            if find_mistake(pre_midi, cur_midi, next_midi, duration,
-                            min_duration):
-                midi_seq[place-1].end = midi_seq[place+1].end
-                midi_seq.remove(midi_seq[place+1])
+        if find_mistake(prev_note, cur_note, next_note, min_duration):
+            prev_note.end = next_note.end
+            prev_note.temp = False
+            midi_seq.remove(midi_seq[midi_seq.index(cur_note)])
+            midi_seq.remove(midi_seq[midi_seq.index(next_note)])
 
-                place = midi_seq.index(note)
-                midi_seq.remove(midi_seq[place])
+            print(f"New Note: {prev_note.start}, {prev_note.end}")
+            return midi_seq, False
 
-                return midi_seq, last
+        while next((note for note in midi_seq if note.temp), None):
+            midi_seq.remove(next((note for note in midi_seq if note.temp),
+                            None))
 
-    return midi_seq, last
-
+    return midi_seq, True
 
 
 class Note:  # Note object to store input for note_seq
-    def __init__(self, midi_num, start_time, finished, end_time=None):
+    def __init__(self, midi_num, start_time, end_time, finished, temporary):
         self.midi = midi_num
         self.start = start_time
         self.end = end_time
         self.finished = finished
+        self.temp = temporary
 
     def finalize(self, cycles, chunk_seconds):
-        self.end = (cycles) * chunk_seconds
+        self.end = round((cycles) * chunk_seconds, 3)
         self.finished = True
 
         return self
@@ -157,7 +162,7 @@ while cycles < CYCLE_MAX:
         cycles += 1
         last_midi = None
         seq.append(None)
-        print("Rest\n")
+        print("Rest")
         continue
 
     cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
@@ -168,7 +173,8 @@ while cycles < CYCLE_MAX:
           f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
 
     if last_midi != midi:  # Finalize previous note, start new
-        new_note = Note(midi, cycles*CHUNK_DURATION, finished=False)
+        new_note = Note(midi, round(cycles*CHUNK_DURATION, 3), None,
+                        finished=False, temporary=False)
 
         if pre_seq and last_midi:
             prev = next(note for note in pre_seq if not note.finished)
@@ -182,12 +188,19 @@ while cycles < CYCLE_MAX:
     last_midi = midi
     cycles += 1
 
-final_seq = copy.deepcopy(pre_seq)
 
-res = process_MIDI(final_seq, CHUNKSIZE)
+# Cleanup
+stream.stop_stream()
+stream.close()
+p.terminate()
+
+
+final_seq = copy.deepcopy(pre_seq)
+res = process_MIDI(final_seq, CHUNK_DURATION)
 while not res[1]:
-    res = process_MIDI(res[0], CHUNKSIZE)
+    res = process_MIDI(res[0], CHUNK_DURATION)
 final_seq = res[0]
+
 
 pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
 post_mel = note_seq.protobuf.music_pb2.NoteSequence()
@@ -210,18 +223,7 @@ post = pretty_midi.PrettyMIDI('Output/post_out.mid')
 visual_midi.Plotter().save(pre, 'Output/pre_plotted.html')
 visual_midi.Plotter().save(post, 'Output/post_plotted.html')
 
-# Cleanup
-stream.stop_stream()
-stream.close()
-p.terminate()
-
 print("\nMIDI Sequence: ", seq)
-
-# Import Dependencies
-from magenta.models.melody_rnn import melody_rnn_sequence_generator
-from magenta.models.shared import sequence_generator_bundle
-from note_seq.protobuf import generator_pb2
-from note_seq.protobuf import music_pb2
 
 # Initialize Model
 bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
