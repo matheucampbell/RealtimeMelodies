@@ -2,6 +2,7 @@ from decimal import Decimal
 from matplotlib import pyplot as plt  # Data visualization
 from scipy.fft import rfft, rfftfreq  # Scientific functions
 
+import copy
 import magenta  # Google's ML for Art and Music Module
 import math
 import numpy as np  # Array operations/indexing
@@ -18,11 +19,11 @@ seq = []  # To store sequence of MIDI numbers
 pre_seq = []  # To store Note objects for MIDI
 last_midi = None
 
-CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in seconds
+CHUNK_DURATION = float(sys.argv[1])  # Argument defines chunk duration in sec
 DURATION = float(sys.argv[2])  # Argument defines total duration in seconds
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles to capture
+CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -65,7 +66,7 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
         if prev == next:
             check_2 = True
 
-        if (current - prev) % 12 == 0 or abs(current - prev) < 1:
+        if (current - prev) % 12 == 0 or abs(current - prev) == 1:
             check_3 = True
 
         if abs(current - prev) > 14 or abs(current - next) > 14:
@@ -105,12 +106,14 @@ def process_MIDI(midi_seq, min_duration):  # Correct errors in interpretation
             prev_note = midi_seq[place-1]
             next_note = cur_note
 
-        if not last:
-            if find_mistake(pre_midi, cur_midi, next_midi, duration, min_duration):
+        if not last and place:
+            if find_mistake(pre_midi, cur_midi, next_midi, duration,
+                            min_duration):
                 midi_seq[place-1].end = midi_seq[place+1].end
                 midi_seq.remove(midi_seq[place+1])
-                midi_seq.remove(cur_note)
-                print(f"Start: {cur_note.start}")
+
+                place = midi_seq.index(note)
+                midi_seq.remove(midi_seq[place])
 
                 return midi_seq, last
 
@@ -179,18 +182,12 @@ while cycles < CYCLE_MAX:
     last_midi = midi
     cycles += 1
 
-final_seq = pre_seq.copy()
-
-for note in pre_seq:
-    print(note.midi, note.start, note.end)
+final_seq = copy.deepcopy(pre_seq)
 
 res = process_MIDI(final_seq, CHUNKSIZE)
 while not res[1]:
     res = process_MIDI(res[0], CHUNKSIZE)
 final_seq = res[0]
-
-for note in pre_seq:
-    print(note.midi, note.start, note.end)
 
 pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
 post_mel = note_seq.protobuf.music_pb2.NoteSequence()
@@ -199,9 +196,9 @@ for note in pre_seq:  # Add all the notes
     pre_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
                       velocity=80)
 
-for note in final_seq:  # Add all the notes
-    post_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
-                      velocity=80)
+for note in final_seq:
+    post_mel.notes.add(pitch=note.midi, start_time=note.start,
+                       end_time=note.end, velocity=80)
 
 note_seq.sequence_proto_to_midi_file(pre_mel, 'Output/pre_out.mid')
 note_seq.sequence_proto_to_midi_file(post_mel, 'Output/post_out.mid')
@@ -240,7 +237,8 @@ tmp = 1.0
 gen_options = generator_pb2.GeneratorOptions()
 gen_options.args['temperature'].float_value = tmp
 gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
-                                                end_time=(final_seq[-1].end - final_seq[1].start) * 2)
+                                                end_time=(final_seq[-1].end -
+                                                final_seq[1].start) * 2)
 
 out = melody_rnn.generate(post_mel, gen_options)
 
