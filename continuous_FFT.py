@@ -30,6 +30,7 @@ DURATION = round(float(sys.argv[2]), 3)  # Defines total duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles
+MIN_NOTE_SIZE = int(CHUNK_DURATION * 1)
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -71,7 +72,6 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
 #     - Only one semitone from adjacent notes
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
-
         if (current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
                 if abs(current.midi - prev.midi) == 1 or\
@@ -93,7 +93,7 @@ def process_MIDI(midi_seq, min_duration):
 
 
     def correct_note(prev_note, error, next_note, main_seq, type):
-        if type == 1:
+        if type == 1:  # Brief middle/end semitone error
             prev_note.end = next_note.end
             prev_note.temp = False
             main_seq.remove(main_seq[main_seq.index(error)])
@@ -101,21 +101,22 @@ def process_MIDI(midi_seq, min_duration):
 
             return main_seq
 
-        elif type == 2:
+        elif type == 2:  # Brief left transition error
             prev_note.end == error.end
+            prev_note.temp = False
             main_seq.remove(main_seq[main_seq.index(error)])
 
             return main_seq
 
-        elif type == 3:
+        elif type == 3: # Brief right transition error
             next_note.start = error.start
+            next_note.temp = False
             main_seq.remove(main_seq[main_seq.index(error)])
 
             return main_seq
 
 
     for cur_note in midi_seq:
-        print(f"Checking: {cur_note.midi}, {cur_note.start}, {cur_note.end}")
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
         next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
 
@@ -185,7 +186,7 @@ while cycles < CYCLE_MAX:
         cycles += 1
         last_midi = None
         seq.append(None)
-        print("Rest")
+        print("Rest\n")
         continue
 
     cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE,
@@ -212,19 +213,16 @@ while cycles < CYCLE_MAX:
     last_midi = midi
     cycles += 1
 
+final_seq = copy.deepcopy(pre_seq)
+res = process_MIDI(final_seq, MIN_NOTE_SIZE)
+while not res[1]:
+    res = process_MIDI(res[0], MIN_NOTE_SIZE)
+final_seq = res[0]
 
 # Cleanup
 stream.stop_stream()
 stream.close()
 p.terminate()
-
-
-final_seq = copy.deepcopy(pre_seq)
-res = process_MIDI(final_seq, CHUNK_DURATION)
-while not res[1]:
-    res = process_MIDI(res[0], CHUNK_DURATION)
-final_seq = res[0]
-
 
 pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
 post_mel = note_seq.protobuf.music_pb2.NoteSequence()
