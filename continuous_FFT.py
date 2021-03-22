@@ -70,16 +70,20 @@ def process_MIDI(midi_seq, min_duration):
         check_3 = False
         check_4 = False
 
+        # Possible mistake is minimum duration
         if (current.end - current.start) <= min_dur:
             check_1 = True
 
+        # Previous same as next
         if prev.midi == next.midi:
             check_2 = True
 
+        # Only octave difference or one semitone difference
         if (current.midi - prev.midi) % 12 == 0 or\
            abs(current.midi - prev.midi) == 1:
             check_3 = True
 
+        # Greater than 12 semitones off
         if abs(current.midi - prev.midi) > 12 or\
            abs(current.midi - next.midi) > 12:
             check_4 = True
@@ -96,16 +100,19 @@ def process_MIDI(midi_seq, min_duration):
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
         next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
 
+        # if there's only a next note; no previous
         if not prev_note and next_note:
             prev_note = Note(next_note.midi, cur_note.start, cur_note.end,
                              finished=True, temporary=True)
             midi_seq.append(prev_note)
 
+        # if only a next note; no previous
         elif not next_note and prev_note:
             next_note = Note(prev_note.midi, cur_note.start, cur_note.end,
                              finished=True, temporary=True)
             midi_seq.append(next_note)
 
+        # if note is completely isolated
         elif not prev_note and not next_note:
             continue
 
