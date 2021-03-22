@@ -68,33 +68,37 @@ def process_MIDI(midi_seq, min_duration):
         check_1 = False
         check_2 = False
         check_3 = False
-        check_4 = False
 
         # Possible mistake is minimum duration
         if (current.end - current.start) <= min_dur:
             check_1 = True
 
-        # Previous same as next
-        if prev.midi == next.midi:
-            check_2 = True
-
         # Only octave difference or one semitone difference
         if (current.midi - prev.midi) % 12 == 0 or\
-           abs(current.midi - prev.midi) == 1:
-            check_3 = True
+           abs(current.midi - prev.midi) == 1 or\
+           abs(current.midi - next.midi) == 1:
+            check_2 = True
 
         # Greater than 12 semitones off
         if abs(current.midi - prev.midi) > 12 or\
            abs(current.midi - next.midi) > 12:
-            check_4 = True
+            check_3 = True
 
-        if check_1 and check_2 and check_3 or check_4:
+        if check_1 and check_2 or check_3:
             print("Possible error changed:" +
                   f"{prev.midi}, {current.midi}, {next.midi}")
             return True
         else:
             return False
 
+    def correct_error(prev_note, error, next_note, main_seq):
+        prev_note.end = next_note.end
+        prev_note.temp = False
+        main_seq.remove(main_seq[main_seq.index(error)])
+        main_seq.remove(main_seq[main_seq.index(next_note)])
+        return main_seq
+
+        
     for cur_note in midi_seq:
         print(f"Checking: {cur_note.midi}, {cur_note.start}, {cur_note.end}")
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
@@ -117,12 +121,7 @@ def process_MIDI(midi_seq, min_duration):
             continue
 
         if find_mistake(prev_note, cur_note, next_note, min_duration):
-            prev_note.end = next_note.end
-            prev_note.temp = False
-            midi_seq.remove(midi_seq[midi_seq.index(cur_note)])
-            midi_seq.remove(midi_seq[midi_seq.index(next_note)])
-
-            print(f"New Note: {prev_note.start}, {prev_note.end}")
+            midi_seq = correct_mistake(prev_note, cur_note, next_note, midi_seq)
             return midi_seq, False
 
         while next((note for note in midi_seq if note.temp), None):
