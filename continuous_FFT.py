@@ -44,12 +44,18 @@ stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
 
 
 # Calculates peak frequency of one chunk of audio
-def calculate_peak(waves, chunksize, sampling_rate):
+def calculate_peak(waves, chunksize, sampling_rate, start=0):
     yf = rfft(waves)
     xf = rfftfreq(waves.size, 1/sampling_rate)
 
     peak = np.where(np.abs(yf) == np.abs(yf).max())[0][0]
     peak = round((peak/((chunksize)/sampling_rate)), 2)
+
+    # midi_num = round((12*math.log((peak/440), 2) + 69))
+    # plt.plot(xf[:300], np.abs(yf)[:300])
+    # plt.title(f"Peak: {peak}; Start: {start}")
+    # plt.savefig(f"Output/FFTs/{midi_num}{str(start)[:1]}")
+    # plt.close()
 
     return peak
 
@@ -65,48 +71,49 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
 #     - Only one semitone from adjacent notes
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
-        dur_check = False
-        eq_check = False
-        oct_check = False
-        semi_check = False
-        ext_check = False
 
-        # Possible mistake is minimum duration
         if (current.end - current.start) <= min_dur:
-            dur_check = True
-
-        # Equal adjacent notes
-        if prev.midi == next.midi:
-            eq_check = True
-            
-        # Only octave difference or one semitone difference
-        if (current.midi - prev.midi) % 12 == 0:
-            oct_check = True
-        
-        if abs(current.midi - prev.midi) == 1 or\
-           abs(current.midi - next.midi) == 1:
-            semi_check = True
-
-        # Greater than 12 semitones off
-        if abs(current.midi - prev.midi) > 12 or\
-           abs(current.midi - next.midi) > 12:
-            ext_check = True
-
-        if check_1 and check_2 and check_3 or check_4:
-            return True
-        elif not 
+            if prev.midi == next.midi:
+                if abs(current.midi - prev.midi) == 1 or\
+                   abs(current.midi - prev.midi) > 12 or\
+                   abs(current.midi - prev.midi) % 12 == 0:
+                    return 1  # Brief middle/end semitone error
+            elif abs(current.midi - prev.midi) == 1 or\
+                 abs(current.midi - prev.midi) > 12 or\
+                 abs(current.midi - prev.midi) % 12 == 0:
+                 return 2  # Brief left transition error
+            elif abs(current.midi - next.midi) == 1 or\
+                 abs(current.midi - next.midi) > 12 or\
+                 abs(current.midi - next.midi) % 12 == 0:
+                 return 3  # Brief right transition error
+            else:
+                return 0  # No error found
         else:
-            return False
+            return 0  # No error found
 
-    def correct_mid(prev_note, error, next_note, main_seq):
-        prev_note.end = next_note.end
-        prev_note.temp = False
-        main_seq.remove(main_seq[main_seq.index(error)])
-        main_seq.remove(main_seq[main_seq.index(next_note)])
 
-        return main_seq
+    def correct_note(prev_note, error, next_note, main_seq, type):
+        if type == 1:
+            prev_note.end = next_note.end
+            prev_note.temp = False
+            main_seq.remove(main_seq[main_seq.index(error)])
+            main_seq.remove(main_seq[main_seq.index(next_note)])
 
-        
+            return main_seq
+
+        elif type == 2:
+            prev_note.end == error.end
+            main_seq.remove(main_seq[main_seq.index(error)])
+
+            return main_seq
+
+        elif type == 3:
+            next_note.start = error.start
+            main_seq.remove(main_seq[main_seq.index(error)])
+
+            return main_seq
+
+
     for cur_note in midi_seq:
         print(f"Checking: {cur_note.midi}, {cur_note.start}, {cur_note.end}")
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
@@ -128,8 +135,10 @@ def process_MIDI(midi_seq, min_duration):
         elif not prev_note and not next_note:
             continue
 
-        if find_mistake(prev_note, cur_note, next_note, min_duration):
-            midi_seq = correct_mid(prev_note, cur_note, next_note, midi_seq)
+        mis = find_mistake(prev_note, cur_note, next_note, min_duration)
+
+        if mis:
+            midi_seq = correct_note(prev_note, cur_note, next_note, midi_seq, mis)
             return midi_seq, False
 
         while next((note for note in midi_seq if note.temp), None):
@@ -179,7 +188,8 @@ while cycles < CYCLE_MAX:
         print("Rest")
         continue
 
-    cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE)
+    cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE,
+                              round(cycles*CHUNK_DURATION, 3))
     midi = hz_to_note(cur_peak)
     seq.append(midi)
 
