@@ -58,44 +58,52 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
     return midi_num
 
 # Removes notes whose adjacent notes are the same when the given note is the
-# minimum duration long and meets a removal criteria.
+# minimum duration long and meets a removal criterion.
 # Removal Criteria:
 #     - Same octave as adjacent notes
 #     - Extreme distance from adjacent notes ( > 14 semitones))
 #     - Only one semitone from adjacent notes
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
-        check_1 = False
-        check_2 = False
-        check_3 = False
+        dur_check = False
+        eq_check = False
+        oct_check = False
+        semi_check = False
+        ext_check = False
 
         # Possible mistake is minimum duration
         if (current.end - current.start) <= min_dur:
-            check_1 = True
+            dur_check = True
 
+        # Equal adjacent notes
+        if prev.midi == next.midi:
+            eq_check = True
+            
         # Only octave difference or one semitone difference
-        if (current.midi - prev.midi) % 12 == 0 or\
-           abs(current.midi - prev.midi) == 1 or\
+        if (current.midi - prev.midi) % 12 == 0:
+            oct_check = True
+        
+        if abs(current.midi - prev.midi) == 1 or\
            abs(current.midi - next.midi) == 1:
-            check_2 = True
+            semi_check = True
 
         # Greater than 12 semitones off
         if abs(current.midi - prev.midi) > 12 or\
            abs(current.midi - next.midi) > 12:
-            check_3 = True
+            ext_check = True
 
-        if check_1 and check_2 or check_3:
-            print("Possible error changed:" +
-                  f"{prev.midi}, {current.midi}, {next.midi}")
+        if check_1 and check_2 and check_3 or check_4:
             return True
+        elif not 
         else:
             return False
 
-    def correct_error(prev_note, error, next_note, main_seq):
+    def correct_mid(prev_note, error, next_note, main_seq):
         prev_note.end = next_note.end
         prev_note.temp = False
         main_seq.remove(main_seq[main_seq.index(error)])
         main_seq.remove(main_seq[main_seq.index(next_note)])
+
         return main_seq
 
         
@@ -121,7 +129,7 @@ def process_MIDI(midi_seq, min_duration):
             continue
 
         if find_mistake(prev_note, cur_note, next_note, min_duration):
-            midi_seq = correct_mistake(prev_note, cur_note, next_note, midi_seq)
+            midi_seq = correct_mid(prev_note, cur_note, next_note, midi_seq)
             return midi_seq, False
 
         while next((note for note in midi_seq if note.temp), None):
