@@ -39,12 +39,6 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
     midi_num = round((12*math.log((freq/440), 2) + 69))
     return midi_num
 
-# Removes notes whose adjacent notes are the same when the given note is the
-# minimum duration long and meets a removal criterion.
-# Removal Criteria:
-#     - Same octave as adjacent notes
-#     - Extreme distance from adjacent notes ( > 14 semitones))
-#     - Only one semitone from adjacent notes
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
         print(current.end - current.start, min_dur)
