@@ -19,31 +19,6 @@ from magenta.models.shared import sequence_generator_bundle
 from note_seq.protobuf import generator_pb2
 from note_seq.protobuf import music_pb2
 
-data = False  # Whether or not any audio data has been collected
-cycles = 0  # Number of cycles completed
-seq = []  # To store sequence of MIDI numbers
-pre_seq = []  # To store Note objects for MIDI processing
-last_midi = None  # Stores value of last note; NONE if rest or just starting
-
-CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
-DURATION = round(float(sys.argv[2]), 3)  # Defines total duration in sec
-SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
-CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-CYCLE_MAX = int((SAMPLING_RATE*DURATION)/CHUNKSIZE)  # Total number of cycles
-MIN_NOTE_SIZE = int(CHUNK_DURATION * 1)
-
-p = pyaudio.PyAudio()  # Initialize PyAudio object
-
-print(f"Recording {round((CHUNKSIZE*CYCLE_MAX)/SAMPLING_RATE, 2)} seconds "
-      f"of audio in {round(CHUNKSIZE/SAMPLING_RATE, 2)} second chunks.\n")
-
-input("Press enter to proceed.")
-
-# Open stream with standard parameters
-stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
-                input=True, frames_per_buffer=CHUNKSIZE)
-
-
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start=0):
     yf = rfft(waves)
@@ -72,8 +47,10 @@ def hz_to_note(freq):  # Converts frequencies to MIDI values
 #     - Only one semitone from adjacent notes
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
-        if (current.end - current.start) <= min_dur:
+        print(current.end - current.start, min_dur)
+        if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
+                print("EQUAL")
                 if abs(current.midi - prev.midi) == 1 or\
                    abs(current.midi - prev.midi) > 12 or\
                    abs(current.midi - prev.midi) % 12 == 0:
@@ -81,14 +58,18 @@ def process_MIDI(midi_seq, min_duration):
             elif abs(current.midi - prev.midi) == 1 or\
                  abs(current.midi - prev.midi) > 12 or\
                  abs(current.midi - prev.midi) % 12 == 0:
+                 print("SEMITONE")
                  return 2  # Brief left transition error
             elif abs(current.midi - next.midi) == 1 or\
                  abs(current.midi - next.midi) > 12 or\
                  abs(current.midi - next.midi) % 12 == 0:
+                 print("SEMITONE RIGHT")
                  return 3  # Brief right transition error
             else:
+                print("NO PROBLEM")
                 return 0  # No error found
         else:
+            print("NO PROBLEM 2")
             return 0  # No error found
 
 
@@ -164,54 +145,76 @@ class Note:  # Note object to store input for note_seq
         return self
 
 
-while cycles < CYCLE_MAX:
-    # Reads stream and converts from bytes to amplitudes
-    new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
+def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
+    rest_dur = 0
+    data = False
+    cycles = 0
+    last_midi = None  # Stores value of last note; NONE if rest or just starting
+    seq = []  # To store sequence of MIDI numbers
+    pre_seq = []  # To store Note objects for MIDI processing
 
-    if data:  # Stacks onto previous data if necessary
-        freq_data = np.hstack((freq_data, new))  # Adds new chunk
+    while True:
+        # Reads stream and converts from bytes to amplitudes
+        new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
-    else:
-        freq_data = new
-        data = True
+        if new.max() <= 8000:
+            if last_midi:
+                prev = next((note for note in pre_seq if not note.finished), None)
+                if prev:
+                    prev.finalize(cycles, chunk_dur)
+                rest_dur = 0
+            elif not last_midi and pre_seq:
+                rest_dur += chunk_dur
 
-    if new.max() <= 8000:
-        if last_midi:
-            prev = next(note for note in pre_seq if not note.finished)
-            prev.finalize(cycles, CHUNK_DURATION)
+                if rest_dur >= rest_max and\
+                   (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
+                   pre_seq[-1].finalize(cycles, chunk_dur)
+                   return pre_seq
+                elif rest_dur >= rest_max and not\
+                     (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
+                    print("Melody too short. Resetting.")
+                    return find_melody(chunksize, chunk_dur, sampl)
 
-        if cycles == CYCLE_MAX - 1:
-            pre_seq[-1].finalize(cycles, CHUNK_DURATION)
+            last_midi = None
+            cycles += 1
+            continue
+
+        cur_peak = calculate_peak(new, chunksize, sampl,
+                                  round(cycles*chunk_dur, 3))
+        midi = hz_to_note(cur_peak)
+        seq.append(midi)
+
+        print(f"Current: {str(cur_peak)} Hz\n" +
+              f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
+
+        if last_midi != midi:  # Finalize previous note, start new
+            new_note = Note(midi, round(cycles*chunk_dur, 3), None,
+                            finished=False, temporary=False)
+            pre_seq.append(new_note)
+
+            if pre_seq and last_midi:
+                prev = next(note for note in pre_seq if not note.finished)
+                prev.finalize(cycles, chunk_dur)
 
         cycles += 1
-        last_midi = None
-        seq.append(None)
-        print("Rest\n")
-        continue
+        last_midi = midi
 
-    cur_peak = calculate_peak(new, CHUNKSIZE, SAMPLING_RATE,
-                              round(cycles*CHUNK_DURATION, 3))
-    midi = hz_to_note(cur_peak)
-    seq.append(midi)
 
-    print(f"Current: {str(cur_peak)} Hz\n" +
-          f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
+CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
+SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
+CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
+MIN_NOTE_SIZE = float(CHUNK_DURATION * 1)
 
-    if last_midi != midi:  # Finalize previous note, start new
-        new_note = Note(midi, round(cycles*CHUNK_DURATION, 3), None,
-                        finished=False, temporary=False)
+p = pyaudio.PyAudio()  # Initialize PyAudio object
 
-        if pre_seq and last_midi:
-            prev = next(note for note in pre_seq if not note.finished)
-            prev.finalize(cycles, CHUNK_DURATION)
+print(f"Recording audio in {round(CHUNKSIZE/SAMPLING_RATE, 2)} second chunks.")
+input("Press enter to proceed.")
 
-        pre_seq.append(new_note)
+# Open stream with standard parameters
+stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
+                input=True, frames_per_buffer=CHUNKSIZE)
 
-    if cycles == CYCLE_MAX - 1:
-        pre_seq[-1].finalize(cycles, CHUNK_DURATION)
-
-    last_midi = midi
-    cycles += 1
+pre_seq = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
 
 final_seq = copy.deepcopy(pre_seq)
 res = process_MIDI(final_seq, MIN_NOTE_SIZE)
@@ -244,8 +247,6 @@ post = pretty_midi.PrettyMIDI('Output/post_out.mid')
 
 visual_midi.Plotter().save(pre, 'Output/pre_plotted.html')
 visual_midi.Plotter().save(post, 'Output/post_plotted.html')
-
-print("\nMIDI Sequence: ", seq)
 
 # Initialize Model
 bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
