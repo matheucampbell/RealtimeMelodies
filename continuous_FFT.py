@@ -44,7 +44,6 @@ def process_MIDI(midi_seq, min_duration):
         print(current.end - current.start, min_dur)
         if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
-                print("EQUAL")
                 if abs(current.midi - prev.midi) == 1 or\
                    abs(current.midi - prev.midi) > 12 or\
                    abs(current.midi - prev.midi) % 12 == 0:
@@ -52,18 +51,14 @@ def process_MIDI(midi_seq, min_duration):
             elif abs(current.midi - prev.midi) == 1 or\
                  abs(current.midi - prev.midi) > 12 or\
                  abs(current.midi - prev.midi) % 12 == 0:
-                 print("SEMITONE")
                  return 2  # Brief left transition error
             elif abs(current.midi - next.midi) == 1 or\
                  abs(current.midi - next.midi) > 12 or\
                  abs(current.midi - next.midi) % 12 == 0:
-                 print("SEMITONE RIGHT")
                  return 3  # Brief right transition error
             else:
-                print("NO PROBLEM")
                 return 0  # No error found
         else:
-            print("NO PROBLEM 2")
             return 0  # No error found
 
 
@@ -74,21 +69,17 @@ def process_MIDI(midi_seq, min_duration):
             main_seq.remove(main_seq[main_seq.index(error)])
             main_seq.remove(main_seq[main_seq.index(next_note)])
 
-            return main_seq
-
         elif type == 2:  # Brief left transition error
             prev_note.end == error.end
             prev_note.temp = False
             main_seq.remove(main_seq[main_seq.index(error)])
-
-            return main_seq
 
         elif type == 3: # Brief right transition error
             next_note.start = error.start
             next_note.temp = False
             main_seq.remove(main_seq[main_seq.index(error)])
 
-            return main_seq
+        return main_seq
 
 
     for cur_note in midi_seq:
@@ -154,8 +145,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
         if new.max() <= 8000:
             if last_midi:
                 prev = next((note for note in pre_seq if not note.finished), None)
-                if prev:
-                    prev.finalize(cycles, chunk_dur)
+                prev.finalize(cycles, chunk_dur)
                 rest_dur = 0
             elif not last_midi and pre_seq:
                 rest_dur += chunk_dur
