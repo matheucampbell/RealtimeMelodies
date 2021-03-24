@@ -134,7 +134,6 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
     data = False
     cycles = 0
     last_midi = None  # Stores value of last note; NONE if rest or just starting
-    seq = []  # To store sequence of MIDI numbers
     pre_seq = []  # To store Note objects for MIDI processing
 
     while True:
@@ -164,11 +163,10 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
 
         cur_peak = calculate_peak(new, chunksize, sampl,
                                   round(cycles*chunk_dur, 3))
-        midi = hz_to_note(cur_peak)
-        seq.append(midi)
+        midi = round((12*math.log((freq/440), 2) + 69))
 
-        print(f"Current: {str(cur_peak)} Hz\n" +
-              f"MIDI Number: {str(hz_to_note(cur_peak))}\n")
+        print(f"Current: {cur_peak} Hz\n" +
+              f"MIDI Number: {f"{midi}\n")
 
         if last_midi != midi:  # Finalize previous note, start new
             new_note = Note(midi, round(cycles*chunk_dur, 3), None,
