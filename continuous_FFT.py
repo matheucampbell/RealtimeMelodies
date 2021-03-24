@@ -1,4 +1,3 @@
-from decimal import Decimal
 from matplotlib import pyplot as plt  # Data visualization
 from scipy.fft import rfft, rfftfreq  # Scientific functions
 
