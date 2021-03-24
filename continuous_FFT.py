@@ -34,10 +34,6 @@ def calculate_peak(waves, chunksize, sampling_rate, start=0):
 
     return peak
 
-def hz_to_note(freq):  # Converts frequencies to MIDI values
-    midi_num = round((12*math.log((freq/440), 2) + 69))
-    return midi_num
-
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
         print(current.end - current.start, min_dur)
