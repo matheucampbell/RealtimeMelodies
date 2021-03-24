@@ -134,7 +134,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
         # Reads stream and converts from bytes to amplitudes
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
-        if new.max() <= 8000:
+        if new.max() <= 8000:  # Rest
             if last_midi:
                 prev = next((note for note in pre_seq if not note.finished), None)
                 prev.finalize(cycles, chunk_dur)
@@ -183,7 +183,7 @@ MIN_NOTE_SIZE = float(CHUNK_DURATION * 1)
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
-print(f"Recording audio in {round(CHUNKSIZE/SAMPLING_RATE, 2)} second chunks.")
+print(f"Recording audio in {CHUNK_DURATION} second chunks.")
 input("Press enter to proceed.")
 
 # Open stream with standard parameters
