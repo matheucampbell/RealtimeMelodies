@@ -149,7 +149,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
                 elif rest_dur >= rest_max and not\
                      (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
-                    
+
                     return find_melody(chunksize, chunk_dur, sampl)
 
             last_midi = None
@@ -158,7 +158,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
 
         cur_peak = calculate_peak(new, chunksize, sampl,
                                   round(cycles*chunk_dur, 3))
-        midi = round((12*math.log((freq/440), 2) + 69))
+        midi = round((12*math.log((cur_peak/440), 2) + 69))
 
         print(f"Current: {cur_peak} Hz\n" +
               f"MIDI Number: {midi}\n")
