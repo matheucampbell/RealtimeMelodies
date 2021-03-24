@@ -56,32 +56,30 @@ def process_MIDI(midi_seq, min_duration):
         else:
             return 0  # No error found
 
-
     def correct_note(prev_note, error, next_note, main_seq, type):
         if type == 1:  # Brief middle/end semitone error
             prev_note.end = next_note.end
             prev_note.temp = False
-            main_seq.remove(main_seq[main_seq.index(error)])
-            main_seq.remove(main_seq[main_seq.index(next_note)])
+            main_seq.remove(error)
+            main_seq.remove(next_note)
 
         elif type == 2:  # Brief left transition error
             prev_note.end == error.end
             prev_note.temp = False
-            main_seq.remove(main_seq[main_seq.index(error)])
+            main_seq.remove(error)
 
         elif type == 3: # Brief right transition error
             next_note.start = error.start
             next_note.temp = False
-            main_seq.remove(main_seq[main_seq.index(error)])
+            main_seq.remove(error)
 
         return main_seq
-
 
     for cur_note in midi_seq:
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
         next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
 
-        # if there's only a next note; no previous
+        # if only a next note; no previous
         if not prev_note and next_note:
             prev_note = Note(next_note.midi, cur_note.start, cur_note.end,
                              finished=True, temporary=True)
@@ -151,6 +149,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
                 elif rest_dur >= rest_max and not\
                      (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
+                    
                     return find_melody(chunksize, chunk_dur, sampl)
 
             last_midi = None
@@ -162,7 +161,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
         midi = round((12*math.log((freq/440), 2) + 69))
 
         print(f"Current: {cur_peak} Hz\n" +
-              f"MIDI Number: {f"{midi}\n")
+              f"MIDI Number: {midi}\n")
 
         if last_midi != midi:  # Finalize previous note, start new
             new_note = Note(midi, round(cycles*chunk_dur, 3), None,
@@ -194,6 +193,7 @@ stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
 pre_seq = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
 
 final_seq = copy.deepcopy(pre_seq)
+
 res = process_MIDI(final_seq, MIN_NOTE_SIZE)
 while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
