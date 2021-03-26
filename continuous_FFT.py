@@ -33,10 +33,9 @@ def calculate_peak(waves, chunksize, sampling_rate, start=0):
     # plt.close()
 
     return peak
-
+    
 def process_MIDI(midi_seq, min_duration):
-    def find_mistake(prev, current, next, min_dur):
-        print(current.end - current.start, min_dur)
+    def find_mistake(prev, current, next, min_dur):        
         if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
                 if abs(current.midi - prev.midi) == 1 or\
