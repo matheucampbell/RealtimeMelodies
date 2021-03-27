@@ -255,6 +255,7 @@ steps = 16
 tmp = 1.0
 
 # Initialize Generator
+final_seq.sort(key=operator.attrgetter('start'))
 gen_options = generator_pb2.GeneratorOptions()
 gen_options.args['temperature'].float_value = tmp
 gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
