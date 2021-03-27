@@ -71,7 +71,7 @@ def condense_octaves(main_seq):
 
         for x in range(7):
             diff_list = calc_diff(prev, note.midi, (x + 1), diff_list)
-            diff_list = calc_diff(prev, note.midi, (x - 1), diff_list)
+            diff_list = calc_diff(prev, note.midi, -(x + 1), diff_list)
 
         final_shift = min(diff_list)[1]
         print(f"{note.midi} - {note.start} shifted {final_shift} octaves.")
