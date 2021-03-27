@@ -44,12 +44,6 @@ def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     peak = np.where(np.abs(yf) == np.abs(yf).max())[0][0]
     peak = round((peak/((chunksize)/sampling_rate)), 2)
 
-    # midi_num = round((12*math.log((peak/440), 2) + 69))
-    # plt.plot(xf[:300], np.abs(yf)[:300])
-    # plt.title(f"Peak: {peak}; Start: {start}")
-    # plt.savefig(f"Output/FFTs/{cycles}_{midi_num}")
-    # plt.close()
-
     return peak
 
 def condense_octaves(main_seq):
@@ -75,8 +69,6 @@ def condense_octaves(main_seq):
             diff_list = calc_diff(prev, note.midi, -x, diff_list)
 
         final_shift = min(diff_list)[1]
-        print(f"Diff List: {diff_list}")
-        print(f"{note.midi} - {note.start} shifted {final_shift} octaves.")
 
         note.midi = note.midi + 12*final_shift
     return main_seq
@@ -85,17 +77,11 @@ def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
         if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
-                if abs(current.midi - prev.midi) == 1 or\
-                   abs(current.midi - prev.midi) > 12 or\
-                   abs(current.midi - prev.midi) % 12 == 0:
+                if abs(current.midi - prev.midi) <= 1:
                     return 1  # Brief middle/end semitone error
-            elif abs(current.midi - prev.midi) == 1 or\
-                 abs(current.midi - prev.midi) > 12 or\
-                 abs(current.midi - prev.midi) % 12 == 0:
+            elif abs(current.midi - prev.midi) == 1:
                  return 0  # Brief left transition error
-            elif abs(current.midi - next.midi) == 1 or\
-                 abs(current.midi - next.midi) > 12 or\
-                 abs(current.midi - next.midi) % 12 == 0:
+            elif abs(current.midi - next.midi) == 1:
                  return 0  # Brief right transition error
             else:
                 return 0  # No error found
@@ -144,6 +130,8 @@ def process_MIDI(midi_seq, min_duration):
         mis = find_mistake(prev_note, cur_note, next_note, min_duration)
 
         if mis:
+            print(f"Mistake found: {prev_note.midi}, {cur_note.midi} \
+                    {cur_note.start}, {next_note.midi}")
             midi_seq = correct_note(prev_note, cur_note, next_note, midi_seq, mis)
             return midi_seq, False
 
@@ -153,7 +141,7 @@ def process_MIDI(midi_seq, min_duration):
 
     return midi_seq, True
 
-def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=2):
+def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
     rest_dur = 0
     data = False
     cycles = 0
@@ -218,7 +206,7 @@ def save_sequence(seq, prefix):
         mel.notes.add(pitch=note.midi, start_time=note.start,
                           end_time=note.end, velocity=80)
     mel.tempos.add(qpm=85)
-    mel.total_time = pre_seq[-1].end
+    mel.total_time = seq[-1].end
 
     note_seq.sequence_proto_to_midi_file(mel, f'Output/{prefix}_out.mid')
     pre = pretty_midi.PrettyMIDI(f'Output/{prefix}_out.mid')
@@ -229,7 +217,7 @@ def save_sequence(seq, prefix):
 CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-MIN_NOTE_SIZE = float(CHUNK_DURATION * 1)
+MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -278,3 +266,5 @@ gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
 out = melody_rnn.generate(post_mel, gen_options)
 
 note_seq.sequence_proto_to_midi_file(out, 'Output/ext_out.mid')
+ext = pretty_midi.PrettyMIDI('Output/ext_out.mid')
+visual_midi.Plotter().save(ext, 'Output/ext_plotted.html')
