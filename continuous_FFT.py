@@ -130,8 +130,6 @@ def process_MIDI(midi_seq, min_duration):
         mis = find_mistake(prev_note, cur_note, next_note, min_duration)
 
         if mis:
-            print(f"Mistake found: {prev_note.midi}, {cur_note.midi} \
-                    {cur_note.start}, {next_note.midi}")
             midi_seq = correct_note(prev_note, cur_note, next_note, midi_seq, mis)
             return midi_seq, False
 
