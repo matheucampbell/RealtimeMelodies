@@ -6,6 +6,7 @@ import magenta  # Google's ML for Art and Music Module
 import math
 import numpy as np  # Array operations/indexing
 import note_seq  # Serialized input for notes based on frequency and duration
+import operator
 import pyaudio  # Audio interface
 import pretty_midi  # MIDI interface
 import sys
@@ -18,8 +19,24 @@ from magenta.models.shared import sequence_generator_bundle
 from note_seq.protobuf import generator_pb2
 from note_seq.protobuf import music_pb2
 
+
+class Note:  # Note object to store input for note_seq
+    def __init__(self, midi_num, start_time, end_time, finished, temporary):
+        self.midi = midi_num
+        self.start = start_time
+        self.end = end_time
+        self.finished = finished
+        self.temp = temporary
+
+    def finalize(self, cycles, chunk_seconds):
+        self.end = round((cycles) * chunk_seconds, 3)
+        self.finished = True
+
+        return self
+
+
 # Calculates peak frequency of one chunk of audio
-def calculate_peak(waves, chunksize, sampling_rate, start=0):
+def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     yf = rfft(waves)
     xf = rfftfreq(waves.size, 1/sampling_rate)
 
@@ -29,13 +46,41 @@ def calculate_peak(waves, chunksize, sampling_rate, start=0):
     # midi_num = round((12*math.log((peak/440), 2) + 69))
     # plt.plot(xf[:300], np.abs(yf)[:300])
     # plt.title(f"Peak: {peak}; Start: {start}")
-    # plt.savefig(f"Output/FFTs/{midi_num}{str(start)[:1]}")
+    # plt.savefig(f"Output/FFTs/{cycles}_{midi_num}")
     # plt.close()
 
     return peak
-    
+
+def condense_octaves(main_seq):
+    main_seq.sort(key=operator.attrgetter("start"), reverse=False)
+    avg_midi = sum(note.midi for note in main_seq) / len(main_seq)
+    print(f"Average MIDI: {avg_midi}")
+
+    for note in main_seq:
+        if main_seq.index(note):
+            prev = main_seq[main_seq.index(note)-1].midi
+        else:
+            prev = avg_midi
+
+        diff_list = []
+
+        def calc_diff(prev_midi, cur_midi, shift, diff_list):
+            diff = abs(prev_midi - (cur_midi + 12*shift))
+            diff_list.append((diff, shift))
+            return diff_list
+
+        for x in range(7):
+            diff_list = calc_diff(prev, note.midi, (x + 1), diff_list)
+            diff_list = calc_diff(prev, note.midi, (x - 1), diff_list)
+
+        final_shift = min(diff_list)[1]
+        print(f"{note.midi} - {note.start} shifted {final_shift} octaves.")
+
+        note.midi = note.midi + 12*final_shift
+    return main_seq
+
 def process_MIDI(midi_seq, min_duration):
-    def find_mistake(prev, current, next, min_dur):        
+    def find_mistake(prev, current, next, min_dur):
         if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
                 if abs(current.midi - prev.midi) == 1 or\
@@ -45,11 +90,11 @@ def process_MIDI(midi_seq, min_duration):
             elif abs(current.midi - prev.midi) == 1 or\
                  abs(current.midi - prev.midi) > 12 or\
                  abs(current.midi - prev.midi) % 12 == 0:
-                 return 2  # Brief left transition error
+                 return 0  # Brief left transition error
             elif abs(current.midi - next.midi) == 1 or\
                  abs(current.midi - next.midi) > 12 or\
                  abs(current.midi - next.midi) % 12 == 0:
-                 return 3  # Brief right transition error
+                 return 0  # Brief right transition error
             else:
                 return 0  # No error found
         else:
@@ -107,22 +152,24 @@ def process_MIDI(midi_seq, min_duration):
     return midi_seq, True
 
 
-class Note:  # Note object to store input for note_seq
-    def __init__(self, midi_num, start_time, end_time, finished, temporary):
-        self.midi = midi_num
-        self.start = start_time
-        self.end = end_time
-        self.finished = finished
-        self.temp = temporary
+def save_sequence(seq, prefix):
+    seq.sort(key=operator.attrgetter('start'))
+    mel = note_seq.protobuf.music_pb2.NoteSequence()
 
-    def finalize(self, cycles, chunk_seconds):
-        self.end = round((cycles) * chunk_seconds, 3)
-        self.finished = True
+    for note in seq:
+        mel.notes.add(pitch=note.midi, start_time=note.start,
+                          end_time=note.end, velocity=80)
+    mel.tempos.add(qpm=85)
+    mel.total_time = pre_seq[-1].end
 
-        return self
+    note_seq.sequence_proto_to_midi_file(mel, f'Output/{prefix}_out.mid')
+    pre = pretty_midi.PrettyMIDI(f'Output/{prefix}_out.mid')
+    visual_midi.Plotter().save(pre, f'Output/{prefix}_plotted.html')
+
+    return mel
 
 
-def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
+def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=2):
     rest_dur = 0
     data = False
     cycles = 0
@@ -134,11 +181,12 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
 
         if new.max() <= 8000:  # Rest
+            print("Rest")
             if last_midi:
                 prev = next((note for note in pre_seq if not note.finished), None)
                 prev.finalize(cycles, chunk_dur)
                 rest_dur = 0
-            elif not last_midi and pre_seq:
+            elif not last_midi and len(pre_seq) > 2:
                 rest_dur += chunk_dur
 
                 if rest_dur >= rest_max and\
@@ -156,7 +204,8 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
             continue
 
         cur_peak = calculate_peak(new, chunksize, sampl,
-                                  round(cycles*chunk_dur, 3))
+                                  round(cycles*chunk_dur, 3),
+                                  cycles)
         midi = round((12*math.log((cur_peak/440), 2) + 69))
 
         print(f"Current: {cur_peak} Hz\n" +
@@ -190,10 +239,9 @@ stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
                 input=True, frames_per_buffer=CHUNKSIZE)
 
 pre_seq = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
+oct_seq = condense_octaves(copy.deepcopy(pre_seq))
 
-final_seq = copy.deepcopy(pre_seq)
-
-res = process_MIDI(final_seq, MIN_NOTE_SIZE)
+res = process_MIDI(copy.deepcopy(oct_seq), MIN_NOTE_SIZE)
 while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
 final_seq = res[0]
@@ -203,26 +251,10 @@ stream.stop_stream()
 stream.close()
 p.terminate()
 
-pre_mel = note_seq.protobuf.music_pb2.NoteSequence()  # Initialize NoteSequence
-post_mel = note_seq.protobuf.music_pb2.NoteSequence()
-
-for note in pre_seq:  # Add all the notes
-    pre_mel.notes.add(pitch=note.midi, start_time=note.start, end_time=note.end,
-                      velocity=80)
-
-for note in final_seq:
-    post_mel.notes.add(pitch=note.midi, start_time=note.start,
-                       end_time=note.end, velocity=80)
-
-note_seq.sequence_proto_to_midi_file(pre_mel, 'Output/pre_out.mid')
-note_seq.sequence_proto_to_midi_file(post_mel, 'Output/post_out.mid')
-
-# Plot MIDI Sequences
-pre = pretty_midi.PrettyMIDI('Output/pre_out.mid')
-post = pretty_midi.PrettyMIDI('Output/post_out.mid')
-
-visual_midi.Plotter().save(pre, 'Output/pre_plotted.html')
-visual_midi.Plotter().save(post, 'Output/post_plotted.html')
+# Save MIDI plots and MIDI files
+save_sequence(pre_seq, 'pre')
+save_sequence(oct_seq, 'oct')
+post_mel = save_sequence(final_seq, 'post')
 
 # Initialize Model
 bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
