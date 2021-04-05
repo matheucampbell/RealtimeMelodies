@@ -91,9 +91,10 @@ def process_MIDI(midi_seq, min_duration):
         else:
             return 0  # No error found
 
-    def smooth_repeats(prev, current, next):
-        if prev.midi == current.midi and current.midi == next.midi:
-            pass
+    def smooth_repeat(prev, current, next, main_seq):
+        if current.midi == next.midi:
+            current.end = next.end
+            main_seq.remove(next)
         
     # Changes a note that was found to be an error
     def correct_note(prev_note, error, next_note, main_seq, type):
@@ -145,6 +146,13 @@ def process_MIDI(midi_seq, min_duration):
             midi_seq.remove(next((note for note in midi_seq if note.temp),
                             None))
 
+    for cur_note in midi_seq:
+        prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
+        next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
+    
+    if prev_note and next_note:
+        smooth_repeat(prev_note, cur_note, next_note, midi_seq)
+        
     return midi_seq, True
 
 def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
