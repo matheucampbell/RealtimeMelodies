@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt  # Data visualization
-from scipy.fft import rfft, rfftfreq  # Scientific functions
+from scipy.fft import rfft, rfftfreq  # FFT functions
 
 import copy
 import magenta  # Google's ML for Art and Music Module
@@ -46,6 +46,7 @@ def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
 
     return peak
 
+# Condenses all notes into a smaller octave range to reduce octave errors
 def condense_octaves(main_seq):
     main_seq.sort(key=operator.attrgetter("start"), reverse=False)
     note_list = [note.midi for note in main_seq]
@@ -65,19 +66,21 @@ def condense_octaves(main_seq):
             return diff_list
 
         for x in range(9):
-            diff_list = calc_diff(prev, note.midi, x, diff_list)
-            diff_list = calc_diff(prev, note.midi, -x, diff_list)
+            if abs(note.midi - prev) >= 12:
+                diff_list = calc_diff(prev, note.midi, x, diff_list)
+                diff_list = calc_diff(prev, note.midi, -x, diff_list)
 
         final_shift = min(diff_list)[1]
 
         note.midi = note.midi + 12*final_shift
     return main_seq
 
+# Finds a possible error and changes it
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
         if round(current.end - current.start) <= min_dur:
             if prev.midi == next.midi:
-                if abs(current.midi - prev.midi) <= 1:
+                if abs(current.midi - prev.midi) == 1:
                     return 1  # Brief middle/end semitone error
             elif abs(current.midi - prev.midi) == 1:
                  return 0  # Brief left transition error
@@ -88,6 +91,11 @@ def process_MIDI(midi_seq, min_duration):
         else:
             return 0  # No error found
 
+    def smooth_repeats(prev, current, next):
+        if prev.midi == current.midi and current.midi == next.midi:
+            pass
+        
+    # Changes a note that was found to be an error
     def correct_note(prev_note, error, next_note, main_seq, type):
         if type == 1:  # Brief middle/end semitone error
             prev_note.end = next_note.end
@@ -145,10 +153,12 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
     cycles = 0
     last_midi = None  # Stores value of last note; NONE if rest or just starting
     pre_seq = []  # To store Note objects for MIDI processing
+    full_seq = []
 
     while True:
         # Reads stream and converts from bytes to amplitudes
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
+        full_seq = np.hstack(full_seq, new)
 
         if new.max() <= 8000:  # Rest
             print("Rest")
@@ -162,7 +172,8 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
                 if rest_dur >= rest_max and\
                    (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                    pre_seq[-1].finalize(cycles, chunk_dur)
-                   return pre_seq
+                   return pre_seq, full_seq
+                
                 elif rest_dur >= rest_max and not\
                      (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
@@ -226,7 +237,7 @@ input("Press enter to proceed.")
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
                 input=True, frames_per_buffer=CHUNKSIZE)
 
-pre_seq = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
+pre_seq, full_raw = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
 oct_seq = condense_octaves(copy.deepcopy(pre_seq))
 
 res = process_MIDI(copy.deepcopy(oct_seq), MIN_NOTE_SIZE)
