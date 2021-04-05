@@ -75,6 +75,14 @@ def condense_octaves(main_seq):
         note.midi = note.midi + 12*final_shift
     return main_seq
 
+# Generates intervals where rests are
+def find_rests(full_seq):
+    rest_inds = np.where(full_seq < 8000)
+    intervals = []
+    pass
+            
+    
+                          
 # Finds a possible error and changes it
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
