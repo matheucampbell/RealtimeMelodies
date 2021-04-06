@@ -78,10 +78,17 @@ def condense_octaves(main_seq):
 # Generates intervals where rests are
 def find_rests(full_seq):
     rest_inds = np.where(full_seq < 8000)
-    intervals = []
-    pass
-            
+    end = 0
     
+    while len(rest_inds):
+        if rest_inds[end] - rest_inds[0] == end:
+            end += 1
+        else:
+            rest_ints.add(indices[0:end])
+            rest_inds.remove(indices[0:end])
+            end = 0
+    
+    return rest_ints
                           
 # Finds a possible error and changes it
 def process_MIDI(midi_seq, min_duration):
