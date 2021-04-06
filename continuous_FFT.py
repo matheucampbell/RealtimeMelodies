@@ -46,44 +46,16 @@ def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
 
     return peak
 
-# Condenses all notes into a smaller octave range to reduce octave errors
-def condense_octaves(main_seq):
-    main_seq.sort(key=operator.attrgetter("start"), reverse=False)
-    note_list = [note.midi for note in main_seq]
-    med_midi = statistics.median(note_list)
-
-    for note in main_seq:
-        if main_seq.index(note):
-            prev = main_seq[main_seq.index(note)-1].midi
-        else:
-            prev = med_midi
-
-        diff_list = []
-
-        def calc_diff(prev_midi, cur_midi, shift, diff_list):
-            diff = abs(prev_midi - (cur_midi + 12*shift))
-            diff_list.append((diff, shift))
-            return diff_list
-
-        for x in range(9):
-            if abs(note.midi - prev) >= 12:
-                diff_list = calc_diff(prev, note.midi, x, diff_list)
-                diff_list = calc_diff(prev, note.midi, -x, diff_list)
-
-        final_shift = min(diff_list)[1]
-
-        note.midi = note.midi + 12*final_shift
-    return main_seq
-
 # Generates intervals where rests are
 def find_rests(full_seq, noise_min):
-    def threshold(num, threshold):
-        return num < threshold
-    indices = [dex for dex, val in enumerate(full_seq) if threshold(val, noise_min)]
-    
+    def threshold(num, threshold): return abs(num) < threshold
+
+    indices = [dex for dex, val in enumerate(full_seq) if threshold(val, \
+               noise_min)]
+
     rest_ints = []
     end = 0
-    
+
     while len(indices):
         if indices[end] - indices[0] == end and end != len(indices) - 1:
             end += 1
@@ -94,16 +66,41 @@ def find_rests(full_seq, noise_min):
             rest_ints.append(indices[0:end])
             del indices[0:end]
             end = 0
-    
-    rest_ints = [(ls[0], ls[-1] for ls in rest_ints]
-    
+
+    rest_ints = [(ls[0], ls[-1]) for ls in rest_ints]
+
     return rest_ints
 
-                          
+# Condenses all notes into a smaller octave range to reduce octave errors
+def condense_octaves(main_seq):
+    main_seq.sort(key=operator.attrgetter("start"), reverse=False)
+
+    for note in main_seq:
+        note_list = [note.midi for note in main_seq]
+        prev = statistics.median(note_list)
+
+        diff_list = []
+
+        def calc_diff(prev_midi, cur_midi, shift, diff_list):
+            diff = abs(prev_midi - (cur_midi + 12*shift))
+            diff_list.append((diff, shift))
+            return diff_list
+
+        for x in range(9):
+            # if abs(note.midi - prev) >= 12:
+            diff_list = calc_diff(prev, note.midi, x, diff_list)
+            diff_list = calc_diff(prev, note.midi, -x, diff_list)
+
+        # if diff_list:
+        final_shift = min(diff_list)[1]
+        note.midi = note.midi + 12*final_shift
+
+    return main_seq
+
 # Finds a possible error and changes it
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
-        if round(current.end - current.start) <= min_dur:
+        if round((current.end - current.start), 2) <= min_dur:
             if prev.midi == next.midi:
                 if abs(current.midi - prev.midi) == 1:
                     return 1  # Brief middle/end semitone error
@@ -116,11 +113,6 @@ def process_MIDI(midi_seq, min_duration):
         else:
             return 0  # No error found
 
-    def smooth_repeat(prev, current, next, main_seq):
-        if current.midi == next.midi:
-            current.end = next.end
-            main_seq.remove(next)
-        
     # Changes a note that was found to be an error
     def correct_note(prev_note, error, next_note, main_seq, type):
         if type == 1:  # Brief middle/end semitone error
@@ -140,6 +132,27 @@ def process_MIDI(midi_seq, min_duration):
             main_seq.remove(error)
 
         return main_seq
+
+    def smooth_repeat(current, next, main_seq):
+        repeat = False
+        if current.midi == next.midi:
+            print(f"{current.midi}, {current.start}, {current.end}")
+            current.end = next.end
+            repeat = True
+            main_seq.remove(next)
+
+        return main_seq, repeat
+
+    dup = True
+    while dup:
+        dup = False
+        for cur_note in midi_seq:
+            next_note = next((n for n in midi_seq if n.start == cur_note.end),
+                             None)
+            if next_note:
+                midi_seq, rep = smooth_repeat(cur_note, next_note, midi_seq)
+                if rep:
+                    dup = True
 
     for cur_note in midi_seq:
         prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
@@ -164,23 +177,18 @@ def process_MIDI(midi_seq, min_duration):
         mis = find_mistake(prev_note, cur_note, next_note, min_duration)
 
         if mis:
-            midi_seq = correct_note(prev_note, cur_note, next_note, midi_seq, mis)
+            midi_seq = correct_note(prev_note, cur_note, next_note, midi_seq,
+                                    mis)
             return midi_seq, False
 
         while next((note for note in midi_seq if note.temp), None):
             midi_seq.remove(next((note for note in midi_seq if note.temp),
                             None))
 
-    for cur_note in midi_seq:
-        prev_note = next((n for n in midi_seq if n.end == cur_note.start), None)
-        next_note = next((n for n in midi_seq if n.start == cur_note.end), None)
-    
-    if prev_note and next_note:
-        smooth_repeat(prev_note, cur_note, next_note, midi_seq)
-        
     return midi_seq, True
 
-def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
+def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4,
+                noise_min=3500):
     rest_dur = 0
     data = False
     cycles = 0
@@ -191,12 +199,13 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
     while True:
         # Reads stream and converts from bytes to amplitudes
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
-        full_seq = np.hstack(full_seq, new)
+        full_seq = np.hstack((full_seq, new))
 
-        if new.max() <= 8000:  # Rest
-            print("Rest")
+        if new.max() <= noise_min:  # Rest
+            print("Rest\n")
             if last_midi:
-                prev = next((note for note in pre_seq if not note.finished), None)
+                prev = next((note for note in pre_seq if not note.finished), \
+                            None)
                 prev.finalize(cycles, chunk_dur)
                 rest_dur = 0
             elif not last_midi and len(pre_seq) > 2:
@@ -206,12 +215,12 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4):
                    (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                    pre_seq[-1].finalize(cycles, chunk_dur)
                    return pre_seq, full_seq
-                
+
                 elif rest_dur >= rest_max and not\
                      (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
 
-                    return find_melody(chunksize, chunk_dur, sampl)
+                    return find_melody(chunksize, chunk_dur, sampl, noise_min)
 
             last_midi = None
             cycles += 1
@@ -260,6 +269,8 @@ CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
+MIN_VOLUME = 3500
+MIN_REST = .05
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
@@ -270,7 +281,8 @@ input("Press enter to proceed.")
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
                 input=True, frames_per_buffer=CHUNKSIZE)
 
-pre_seq, full_raw = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE)
+pre_seq, full_raw = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE,
+                                noise_min=MIN_VOLUME)
 oct_seq = condense_octaves(copy.deepcopy(pre_seq))
 
 res = process_MIDI(copy.deepcopy(oct_seq), MIN_NOTE_SIZE)
@@ -278,10 +290,24 @@ while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
 final_seq = res[0]
 
+samp_rest = find_rests(full_raw, MIN_VOLUME)
+sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
+            for tup in samp_rest]
+sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
+
+print(sec_rests)
+
 # Cleanup
 stream.stop_stream()
 stream.close()
 p.terminate()
+
+# Plots the waveform and saves the result
+plt.plot(full_raw)
+plt.axhline(MIN_VOLUME, color='r')
+plt.axhline(-MIN_VOLUME, color='r')
+plt.title("Raw Microphone Input")
+plt.savefig("Output/Waveform.png")
 
 # Save MIDI plots and MIDI files
 save_sequence(pre_seq, 'pre')
