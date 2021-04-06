@@ -76,25 +76,28 @@ def condense_octaves(main_seq):
     return main_seq
 
 # Generates intervals where rests are
-def find_rests(full_seq):
-    indices = full_seq
+def find_rests(full_seq, noise_min):
+    def threshold(num, threshold):
+        return num < threshold
+    indices = [dex for dex, val in enumerate(full_seq) if threshold(val, noise_min)]
+    
     rest_ints = []
     end = 0
     
     while len(indices):
-        print(indices[end] - indices[0])
-        if indices[end] - indices[0] == end:
+        if indices[end] - indices[0] == end and end != len(indices) - 1:
             end += 1
+        elif end == len(indices) - 1:
+            rest_ints.append(indices[0:end + 1])
+            del indices[0:end + 1]
         else:
             rest_ints.append(indices[0:end])
             del indices[0:end]
             end = 0
-            print(rest_ints)
+    
+    rest_ints = [(ls[0], ls[-1] for ls in rest_ints]
     
     return rest_ints
-
-# test_seq = [1, 2, 3, 15, 16, 17, 18, 13, 14, 16, 21, 22, 23]
-# ret = find_rests(test_seq)
 
                           
 # Finds a possible error and changes it
