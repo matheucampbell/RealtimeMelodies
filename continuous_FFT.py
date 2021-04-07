@@ -35,6 +35,11 @@ class Note:  # Note object to store input for note_seq
 
         return self
 
+    def add_rest(self, rest_list):
+    rests = [rest for rest in rest_list if rest[0] >= self.start and
+             rest[0] <= self.end or rest[1] >= self.start and rest[1]
+             <= self.end]
+
 
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
