@@ -36,27 +36,28 @@ class Note:  # Note object to store input for note_seq
         return self
 
     def add_rests(self, rest_list, main_seq):
-        rests = [rest for rest in rest_list if 
+        new_notes = []
+        rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
                  self.start <= rest[1] <= self.end]
-        
+
         for x in range(len(rests)):
             new_notes.append((rests[x-1][1], rests[x][0]))
             new_notes.remove(new_notes[0])
-            
+
             if rests[0][0] > self.start:
                 new_notes.append((self.start, rests[0][0]))
             if rests[-1][1] < self.end:
                 new_notes.append((rests[-1][1], self.end))
-        
+
         for note in new_notes:
-            new = Note(note.midi, note.start, note.end, True, False)
+            new = Note(self.midi, note[0], note[1], True, False)
             main_seq.append(new)
-           
+
         main_seq.remove(self)
-        
+
         return main_seq
-        
+
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     yf = rfft(waves)
@@ -157,7 +158,6 @@ def process_MIDI(midi_seq, min_duration):
     def smooth_repeat(current, next, main_seq):
         repeat = False
         if current.midi == next.midi:
-            print(f"{current.midi}, {current.start}, {current.end}")
             current.end = next.end
             repeat = True
             main_seq.remove(next)
@@ -290,7 +290,7 @@ CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
-MIN_VOLUME = 3500
+MIN_VOLUME = 5500
 MIN_REST = .05
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
@@ -316,6 +316,11 @@ sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
             for tup in samp_rest]
 sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
 
+for rest in sec_rests:
+    final_seq.append(Note(55, rest[0], rest[1], True, False))
+
+for note in final_seq:
+    final_seq = note.add_rests(sec_rests, final_seq)
 
 # Cleanup
 stream.stop_stream()
