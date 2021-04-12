@@ -312,16 +312,17 @@ while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
 final_seq = res[0]
 
+rest_seq = copy.deepcopy(final_seq)
 samp_rest = find_rests(full_raw, MIN_VOLUME)
 sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
             for tup in samp_rest]
 sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
 
 for rest in sec_rests:
-    final_seq.append(Note(55, rest[0], rest[1], True, False))
+    rest_seq.append(Note(55, rest[0], rest[1], True, False))
 
-for note in final_seq:
-    final_seq = note.add_rests(sec_rests, final_seq)
+for note in rest_seq:
+    rest_seq = note.add_rests(sec_rests, final_seq)
 
 # Cleanup
 stream.stop_stream()
@@ -339,6 +340,7 @@ plt.savefig("Output/Waveform.png")
 save_sequence(pre_seq, 'pre')
 save_sequence(oct_seq, 'oct')
 post_mel = save_sequence(final_seq, 'post')
+save_sequence(rest_seq, 'rest')
 
 # Initialize Model
 bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
