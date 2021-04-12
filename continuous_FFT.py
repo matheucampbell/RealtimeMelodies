@@ -258,6 +258,7 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4,
         if last_midi != midi:  # Finalize previous note, start new
             if not pre_seq:
                 cycles = 0
+                full_seq = []
 
             new_note = Note(midi, round(cycles*chunk_dur, 3), None,
                             finished=False, temporary=False)
