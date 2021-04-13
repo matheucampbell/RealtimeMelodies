@@ -34,8 +34,8 @@ class Note:  # Note object to store input for note_seq
         self.finished = True
 
         return self
-    
-    def add_rests(self, rest_list, main_seq):
+
+    def add_rests(self, rest_list, output_seq):
         new_notes = []
         rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
@@ -43,11 +43,12 @@ class Note:  # Note object to store input for note_seq
                  self.start >= rest[0] and self.end <= rest[1]]
 
         if not rests:
-            return main_seq
+            output_seq.append(self)
+            return output_seq
 
         for x in range(len(rests)):
             new_notes.append((rests[x-1][1], rests[x][0]))
-            
+
         new_notes.remove(new_notes[0])
 
         if rests[0][0] > self.start:
@@ -56,14 +57,12 @@ class Note:  # Note object to store input for note_seq
             new_notes.append((rests[-1][1], self.end))
 
         new_notes.sort()
-        
+
         for note in new_notes:
             new = Note(self.midi, note[0], note[1], True, False)
-            main_seq.append(new)
+            output_seq.append(new)
 
-        main_seq.remove(self)
-        
-        return main_seq
+        return output_seq
 
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
@@ -215,8 +214,7 @@ def process_MIDI(midi_seq, min_duration):
 
     return midi_seq, True
 
-def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4,
-                noise_min=3500):
+def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
     rest_dur = 0
     data = False
     cycles = 0
@@ -228,14 +226,16 @@ def find_melody(chunksize, chunk_dur, sampl, rest_max=2, mel_min=4,
         # Reads stream and converts from bytes to amplitudes
         new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
         full_seq = np.hstack((full_seq, new))
+        print(f"Volume: {new.max()}")
 
         if new.max() <= noise_min:  # Rest
             print("Rest\n")
             if last_midi:
-                prev = next((note for note in pre_seq if not note.finished), \
+                prev = next((note for note in pre_seq if not note.finished),
                             None)
                 prev.finalize(cycles, chunk_dur)
                 rest_dur = 0
+
             elif not last_midi and len(pre_seq) > 2:
                 rest_dur += chunk_dur
 
@@ -298,7 +298,7 @@ CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
-MIN_VOLUME = 5500
+MIN_VOLUME = 2500
 MIN_REST = .05
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
@@ -319,17 +319,14 @@ while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
 final_seq = res[0]
 
-rest_seq = copy.deepcopy(final_seq)
 samp_rest = find_rests(full_raw, MIN_VOLUME)
 sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
             for tup in samp_rest]
 sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
 
-for rest in sec_rests:
-    rest_seq.append(Note(55, rest[0], rest[1], True, False))
-
-for note in rest_seq:
-    rest_seq = note.add_rests(sec_rests, final_seq)
+rest_seq = []
+for note in final_seq:
+    rest_seq = note.add_rests(sec_rests, rest_seq)
 
 # Cleanup
 stream.stop_stream()
@@ -346,8 +343,8 @@ plt.savefig("Output/Waveform.png")
 # Save MIDI plots and MIDI files
 save_sequence(pre_seq, 'pre')
 save_sequence(oct_seq, 'oct')
-post_mel = save_sequence(final_seq, 'post')
-save_sequence(rest_seq, 'rest')
+save_sequence(final_seq, 'post')
+rest_mel = save_sequence(rest_seq, 'rest')
 
 # Initialize Model
 bundle = sequence_generator_bundle.read_bundle_file('Src/basic_rnn.mag')
@@ -367,7 +364,7 @@ gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
                                                 end_time=(final_seq[-1].end -
                                                 final_seq[1].start) * 2)
 
-out = melody_rnn.generate(post_mel, gen_options)
+out = melody_rnn.generate(rest_mel, gen_options)
 
 note_seq.sequence_proto_to_midi_file(out, 'Output/ext_out.mid')
 ext = pretty_midi.PrettyMIDI('Output/ext_out.mid')
