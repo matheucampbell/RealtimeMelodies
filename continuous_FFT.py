@@ -39,7 +39,8 @@ class Note:  # Note object to store input for note_seq
         new_notes = []
         rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
-                 self.start <= rest[1] <= self.end]
+                 self.start <= rest[1] <= self.end or
+                 self.start >= rest[0] and self.end <= rest[1]]
 
         if not rests:
             return main_seq
