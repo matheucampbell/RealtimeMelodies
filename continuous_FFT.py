@@ -30,7 +30,7 @@ class Note:  # Note object to store input for note_seq
         self.temp = temporary
 
     def finalize(self, cycles, chunk_seconds):
-        self.end = round((cycles) * chunk_seconds, 3)
+        self.end = round(cycles * chunk_seconds, 3)
         self.finished = True
 
         return self
@@ -65,6 +65,7 @@ class Note:  # Note object to store input for note_seq
 
         return output_seq
 
+
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     yf = rfft(waves)
@@ -74,6 +75,7 @@ def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     peak = round((peak/((chunksize)/sampling_rate)), 2)
 
     return peak
+
 
 # Generates intervals where rests are
 def find_rests(full_seq, noise_min):
@@ -99,6 +101,7 @@ def find_rests(full_seq, noise_min):
     rest_ints = [(ls[0], ls[-1]) for ls in rest_ints]
 
     return rest_ints
+
 
 # Condenses all notes into a smaller octave range to reduce octave errors
 def condense_octaves(main_seq):
@@ -126,6 +129,7 @@ def condense_octaves(main_seq):
 
     return main_seq
 
+
 # Finds a possible error and changes it
 def process_MIDI(midi_seq, min_duration):
     def find_mistake(prev, current, next, min_dur):
@@ -134,9 +138,9 @@ def process_MIDI(midi_seq, min_duration):
                 if abs(current.midi - prev.midi) == 1:
                     return 1  # Brief middle/end semitone error
             elif abs(current.midi - prev.midi) == 1:
-                 return 2  # Brief left transition error
+                return 2  # Brief left transition error
             elif abs(current.midi - next.midi) == 1:
-                 return 3  # Brief right transition error
+                return 3  # Brief right transition error
             else:
                 return 0  # No error found
         else:
@@ -151,11 +155,11 @@ def process_MIDI(midi_seq, min_duration):
             main_seq.remove(next_note)
 
         elif type == 2:  # Brief left transition error
-            prev_note.end == error.end
+            prev_note.end = error.end
             prev_note.temp = False
             main_seq.remove(error)
 
-        elif type == 3: # Brief right transition error
+        elif type == 3:  # Brief right transition error
             next_note.start = error.start
             next_note.temp = False
             main_seq.remove(error)
@@ -215,6 +219,7 @@ def process_MIDI(midi_seq, min_duration):
 
     return midi_seq, True
 
+
 def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
     rest_dur = 0
     data = False
@@ -242,11 +247,11 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
 
                 if rest_dur >= rest_max and\
                    (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
-                   pre_seq[-1].finalize(cycles, chunk_dur)
-                   return pre_seq, full_seq
+                    pre_seq[-1].finalize(cycles, chunk_dur)
+                    return pre_seq, full_seq
 
-                elif rest_dur >= rest_max and not\
-                     (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
+                elif rest_dur >= rest_max and not \
+                        (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
 
                     return find_melody(chunksize, chunk_dur, sampl, noise_min)
@@ -279,13 +284,14 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
         cycles += 1
         last_midi = midi
 
+
 def save_sequence(seq, prefix):
     seq.sort(key=operator.attrgetter('start'))
     mel = note_seq.protobuf.music_pb2.NoteSequence()
 
     for note in seq:
         mel.notes.add(pitch=note.midi, start_time=note.start,
-                          end_time=note.end, velocity=80)
+                      end_time=note.end, velocity=80)
     mel.tempos.add(qpm=85)
     mel.total_time = seq[-1].end
 
@@ -294,6 +300,7 @@ def save_sequence(seq, prefix):
     visual_midi.Plotter().save(pre, f'Output/{prefix}_plotted.html')
 
     return mel
+
 
 CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
