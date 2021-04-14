@@ -65,15 +65,6 @@ class Note:  # Note object to store input for note_seq
 
         return output_seq
 
-def smooth_rests(current, next, rest_seq):
-    repeat = False
-    if current.midi == next.midi:
-        current.end = next.end
-        repeat = True
-        main_seq.remove(next)
-
-    return main_seq, repeat
-
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
     yf = rfft(waves)
