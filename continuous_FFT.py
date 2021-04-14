@@ -56,6 +56,7 @@ class Note:  # Note object to store input for note_seq
         if rests[-1][1] < self.end:
             new_notes.append((rests[-1][1], self.end))
 
+        new_notes = [note for note in new_notes if note[0] != note[1]]
         new_notes.sort()
 
         for note in new_notes:
@@ -63,6 +64,15 @@ class Note:  # Note object to store input for note_seq
             output_seq.append(new)
 
         return output_seq
+
+def smooth_rests(current, next, rest_seq):
+    repeat = False
+    if current.midi == next.midi:
+        current.end = next.end
+        repeat = True
+        main_seq.remove(next)
+
+    return main_seq, repeat
 
 # Calculates peak frequency of one chunk of audio
 def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
@@ -133,9 +143,9 @@ def process_MIDI(midi_seq, min_duration):
                 if abs(current.midi - prev.midi) == 1:
                     return 1  # Brief middle/end semitone error
             elif abs(current.midi - prev.midi) == 1:
-                 return 0  # Brief left transition error
+                 return 2  # Brief left transition error
             elif abs(current.midi - next.midi) == 1:
-                 return 0  # Brief right transition error
+                 return 3  # Brief right transition error
             else:
                 return 0  # No error found
         else:
@@ -360,9 +370,9 @@ tmp = 1.0
 final_seq.sort(key=operator.attrgetter('start'))
 gen_options = generator_pb2.GeneratorOptions()
 gen_options.args['temperature'].float_value = tmp
-gen_section = gen_options.generate_sections.add(start_time=final_seq[-1].end,
-                                                end_time=(final_seq[-1].end -
-                                                final_seq[1].start) * 2)
+gen_section = gen_options.generate_sections.add(start_time=rest_seq[-1].end,
+                                                end_time=(rest_seq[-1].end -
+                                                rest_seq[1].start) * 2)
 
 out = melody_rnn.generate(rest_mel, gen_options)
 
