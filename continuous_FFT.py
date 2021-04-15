@@ -119,11 +119,9 @@ def condense_octaves(main_seq):
             return diff_list
 
         for x in range(9):
-            # if abs(note.midi - prev) >= 12:
             diff_list = calc_diff(prev, note.midi, x, diff_list)
             diff_list = calc_diff(prev, note.midi, -x, diff_list)
 
-        # if diff_list:
         final_shift = min(diff_list)[1]
         note.midi = note.midi + 12*final_shift
 
