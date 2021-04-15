@@ -306,7 +306,8 @@ CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
 MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
-MIN_VOLUME = 2500
+MIN_VOLUME = round(float(sys.argv[2]))
+REST_THRESHOLD = .5 * MIN_VOLUME
 MIN_REST = .05
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
@@ -318,6 +319,7 @@ input("Press enter to proceed.")
 stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
                 input=True, frames_per_buffer=CHUNKSIZE)
 
+# Run 4 processing steps: condense octaves, smooth repeats, remove errors, add rests
 pre_seq, full_raw = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE,
                                 noise_min=MIN_VOLUME)
 oct_seq = condense_octaves(copy.deepcopy(pre_seq))
@@ -327,7 +329,7 @@ while not res[1]:
     res = process_MIDI(res[0], MIN_NOTE_SIZE)
 final_seq = res[0]
 
-samp_rest = find_rests(full_raw, MIN_VOLUME)
+samp_rest = find_rests(full_raw, REST_THRESHOLD)
 sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
             for tup in samp_rest]
 sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
