@@ -303,10 +303,10 @@ def save_sequence(seq, prefix):
 CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
 SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
 CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
-MIN_VOLUME = round(float(sys.argv[2]))
-REST_THRESHOLD = .5 * MIN_VOLUME
-MIN_REST = .05
+MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)  # Used to find possible errors
+MIN_VOLUME = round(float(sys.argv[2]))  # Minimum max volume to qualify as note
+REST_THRESHOLD = .5 * MIN_VOLUME  # Maximum volume to qualify as a rest
+MIN_REST = round(float(sys.argv[3])  # Minimum length of a rest in seconds
 
 p = pyaudio.PyAudio()  # Initialize PyAudio object
 
