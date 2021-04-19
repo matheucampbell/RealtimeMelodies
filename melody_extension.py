@@ -286,35 +286,53 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, stream,
         cycles += 1
         last_midi = midi
 
-        
-def calibrate(stream, chunksize, sampling_rate, test_period=10):
+
+def calibrate(chunksize=2056, sampling_rate=44100, test_period=10):
     rest_period = []
     sound_period = []
     rest_period_max = sampling_rate * test_period / chunksize
     sound_period_max = rest_period_max * 2
     cycles = 0
-    
-    
+    print(rest_period_max, sound_period_max)
+
+    p = pyaudio.PyAudio()  # Initialize PyAudio object
+    # Open stream with standard parameters
+
     input("Press enter to begin rest calibration.")
     print("Measuring ambient sound levels. Do not play your instrument.")
+
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sampling_rate,
+                    input=True, frames_per_buffer=chunksize)
+
     while cycles < rest_period_max:
         new = np.frombuffer(stream.read(chunksize), np.int16)
-        rest_period = np.hstack((rest_period, new))
+        rest_period = np.hstack((rest_period, np.abs(new)))
         cycles += 1
-        
+
+    stream.stop_stream()
+    stream.close()
+
     input("Rest calibration complete. Press enter to begin" +
            " instrument calibration.")
     print("Measuring instrument sound levels. Play at your minimum desired "
           + "volume.")
-    while rest_period_max <= cycles <= sound_period_max:
+
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sampling_rate,
+                    input=True, frames_per_buffer=chunksize)
+
+    while cycles <= sound_period_max:
         new = np.frombuffer(stream.read(chunksize), np.int16)
-        sound_period = np.hstack((sound_period, new))
+        sound_period = np.hstack((sound_period, np.abs(new)))
         cycles += 1
-    
-    rest_percentiles = statistics.quantiles(rest_period, n=100)
-    sound_percentiles = statistics.quantiles(sound_period, n=100)
-    
-    return rest_percentiles, sound_percentiles
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    rest_percentile = np.percentile(rest_period, 98)
+    sound_percentile = np.percentile(sound_period, 25)
+
+    return rest_percentile, sound_percentile
 
 
 def save_sequence(seq, prefix):
@@ -334,11 +352,10 @@ def save_sequence(seq, prefix):
     return mel
 
 
-def listen_and_extend(chunk_duration, min_volume, min_rest,
+def listen_and_extend(chunk_duration, min_volume, min_rest, rest_threshold,
                       mel_min=4, rest_max=3, sampling_rate=44100):
     chunksize = int(chunk_duration*sampling_rate)
     min_note_size = float(chunk_duration * 1.05)
-    rest_threshold = .5 * min_volume
 
     p = pyaudio.PyAudio()  # Initialize PyAudio object
 
