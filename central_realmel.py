@@ -1,5 +1,4 @@
 import melody_extension
-import sys
 
 FINAL_REST, MIN_VOLUME = melody_extension.calibrate()
 
