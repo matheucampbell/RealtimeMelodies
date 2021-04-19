@@ -281,36 +281,6 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
 
         cycles += 1
         last_midi = midi
-
-        
-def calibrate(stream, chunksize, sampling_rate, test_period=10):
-    rest_period = []
-    sound_period = []
-    rest_period_max = sampling_rate * test_period / chunksize
-    sound_period_max = rest_period_max * 2
-    cycles = 0
-    
-    
-    input("Press enter to begin rest calibration.")
-    print("Measuring ambient sound levels. Do not play your instrument.")
-    while cycles < rest_period_max:
-        new = np.frombuffer(stream.read(chunksize), np.int16)
-        rest_period = np.hstack((rest_period, new))
-        cycles += 1
-        
-    input("Rest calibration complete. Press enter to begin" +
-           " instrument calibration.")
-    print("Measuring instrument sound levels. Play at your minimum desired "
-          + "volume.")
-    while rest_period_max <= cycles <= sound_period_max:
-        new = np.frombuffer(stream.read(chunksize), np.int16)
-        sound_period = np.hstack((sound_period, new))
-        cycles += 1
-    
-    rest_percentiles = statistics.quantiles(rest_period, n=100)
-    sound_percentiles = statistics.quantiles(sound_period, n=100)
-    
-    return rest_percentiles, sound_percentiles
     
 
 def save_sequence(seq, prefix):
