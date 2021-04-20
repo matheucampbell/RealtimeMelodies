@@ -23,35 +23,35 @@ from note_seq.protobuf import music_pb2
 
 class Note:  # Note object to store input for note_seq
     def __init__(self, midi_num, start_time, end_time, finished, temporary):
-        self.midi = midi_num
-        self.start = start_time
-        self.end = end_time
-        self.finished = finished
-        self.temp = temporary
+        self.midi = midi_num  # Note value attribute
+        self.start = start_time  # Start time in seconds
+        self.end = end_time  # End time in seconds
+        self.finished = finished  # Whether or not the note has end
+        self.temp = temporary  # Attribute used when finding errors
 
-    def finalize(self, cycles, chunk_seconds):
+    def finalize(self, cycles, chunk_seconds):  # Defines end of note
         self.end = round(cycles * chunk_seconds, 3)
         self.finished = True
 
         return self
 
-    def add_rests(self, rest_list, output_seq):
+    def add_rests(self, rest_list, output_seq):  # Inserts rests across a note
         new_notes = []
         rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
                  self.start <= rest[1] <= self.end or
-                 self.start >= rest[0] and self.end <= rest[1]]
+                 self.start >= rest[0] and self.end <= rest[1]]  # Finds relevant rests
 
         if not rests:
             output_seq.append(self)
             return output_seq
 
-        for x in range(len(rests)):
+        for x in range(len(rests)):  # Generates notes between rests
             new_notes.append((rests[x-1][1], rests[x][0]))
 
         new_notes.remove(new_notes[0])
 
-        if rests[0][0] > self.start:
+        if rests[0][0] > self.start:  # Checks for notes at ends
             new_notes.append((self.start, rests[0][0]))
         if rests[-1][1] < self.end:
             new_notes.append((rests[-1][1], self.end))
@@ -59,7 +59,7 @@ class Note:  # Note object to store input for note_seq
         new_notes = [note for note in new_notes if note[0] != note[1]]
         new_notes.sort()
 
-        for note in new_notes:
+        for note in new_notes:  # Adds notes to ongoing sequence
             new = Note(self.midi, note[0], note[1], True, False)
             output_seq.append(new)
 
@@ -67,7 +67,7 @@ class Note:  # Note object to store input for note_seq
 
 
 # Calculates peak frequency of one chunk of audio
-def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
+def calculate_peak(waves, chunksize, sampling_rate):
     yf = rfft(waves)
     xf = rfftfreq(waves.size, 1/sampling_rate)
 
