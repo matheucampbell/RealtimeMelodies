@@ -15,35 +15,35 @@ import visual_midi  # MIDI visualization
 
 class Note:  # Note object to store input for note_seq
     def __init__(self, midi_num, start_time, end_time, finished, temporary):
-        self.midi = midi_num
-        self.start = start_time
-        self.end = end_time
-        self.finished = finished
-        self.temp = temporary
+        self.midi = midi_num  # Note value attribute
+        self.start = start_time  # Start time in seconds
+        self.end = end_time  # End time in seconds
+        self.finished = finished  # Whether or not the note has end
+        self.temp = temporary  # Attribute used when finding errors
 
-    def finalize(self, cycles, chunk_seconds):
+    def finalize(self, cycles, chunk_seconds):  # Defines end of note
         self.end = round(cycles * chunk_seconds, 3)
         self.finished = True
 
         return self
 
-    def add_rests(self, rest_list, output_seq):
+    def add_rests(self, rest_list, output_seq):  # Inserts rests across a note
         new_notes = []
         rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
                  self.start <= rest[1] <= self.end or
-                 self.start >= rest[0] and self.end <= rest[1]]
+                 self.start >= rest[0] and self.end <= rest[1]]  # Finds relevant rests
 
         if not rests:
             output_seq.append(self)
             return output_seq
 
-        for x in range(len(rests)):
+        for x in range(len(rests)):  # Generates notes between rests
             new_notes.append((rests[x-1][1], rests[x][0]))
 
         new_notes.remove(new_notes[0])
 
-        if rests[0][0] > self.start:
+        if rests[0][0] > self.start:  # Checks for notes at ends
             new_notes.append((self.start, rests[0][0]))
         if rests[-1][1] < self.end:
             new_notes.append((rests[-1][1], self.end))
@@ -51,7 +51,7 @@ class Note:  # Note object to store input for note_seq
         new_notes = [note for note in new_notes if note[0] != note[1]]
         new_notes.sort()
 
-        for note in new_notes:
+        for note in new_notes:  # Adds notes to ongoing sequence
             new = Note(self.midi, note[0], note[1], True, False)
             output_seq.append(new)
 
@@ -59,7 +59,7 @@ class Note:  # Note object to store input for note_seq
 
 
 # Calculates peak frequency of one chunk of audio
-def calculate_peak(waves, chunksize, sampling_rate, start, cycles):
+def calculate_peak(waves, chunksize, sampling_rate):
     yf = rfft(waves)
     xf = rfftfreq(waves.size, 1/sampling_rate)
 
@@ -111,11 +111,9 @@ def condense_octaves(main_seq):
             return diff_list
 
         for x in range(9):
-            # if abs(note.midi - prev) >= 12:
             diff_list = calc_diff(prev, note.midi, x, diff_list)
             diff_list = calc_diff(prev, note.midi, -x, diff_list)
 
-        # if diff_list:
         final_shift = min(diff_list)[1]
         note.midi = note.midi + 12*final_shift
 
@@ -212,7 +210,8 @@ def process_MIDI(midi_seq, min_duration):
     return midi_seq, True
 
 
-def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
+def find_melody(chunksize, chunk_dur, sampl, noise_min, stream,
+                rest_max=2, mel_min=4):
     rest_dur = 0
     data = False
     cycles = 0
@@ -222,7 +221,7 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
 
     while True:
         # Reads stream and converts from bytes to amplitudes
-        new = np.frombuffer(stream.read(CHUNKSIZE), np.int16)
+        new = np.frombuffer(stream.read(chunksize), np.int16)
         full_seq = np.hstack((full_seq, new))
         print(f"Volume: {new.max()}")
 
@@ -246,7 +245,10 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
                         (pre_seq[-1].end - pre_seq[1].start) >= mel_min:
                     print("Melody too short. Resetting.")
 
-                    return find_melody(chunksize, chunk_dur, sampl, noise_min)
+                    return find_melody(chunksize, chunk_dur, sampl, noise_min,
+                                       stream,
+                                       rest_max=rest_max,
+                                       mel_min=mel_min)
 
             last_midi = None
             cycles += 1
@@ -277,6 +279,54 @@ def find_melody(chunksize, chunk_dur, sampl, noise_min, rest_max=2, mel_min=4):
         last_midi = midi
 
 
+def calibrate(chunksize=2056, sampling_rate=44100, test_period=10):
+    rest_period = []
+    sound_period = []
+    rest_period_max = sampling_rate * test_period / chunksize
+    sound_period_max = rest_period_max * 2
+    cycles = 0
+    print(rest_period_max, sound_period_max)
+
+    p = pyaudio.PyAudio()  # Initialize PyAudio object
+    # Open stream with standard parameters
+
+    input("Press enter to begin rest calibration.")
+    print("Measuring ambient sound levels. Do not play your instrument.")
+
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sampling_rate,
+                    input=True, frames_per_buffer=chunksize)
+
+    while cycles < rest_period_max:
+        new = np.frombuffer(stream.read(chunksize), np.int16)
+        rest_period = np.hstack((rest_period, np.abs(new)))
+        cycles += 1
+
+    stream.stop_stream()
+    stream.close()
+
+    input("Rest calibration complete. Press enter to begin" +
+           " instrument calibration.")
+    print("Measuring instrument sound levels. Play at your minimum desired "
+          + "volume.")
+
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sampling_rate,
+                    input=True, frames_per_buffer=chunksize)
+
+    while cycles <= sound_period_max:
+        new = np.frombuffer(stream.read(chunksize), np.int16)
+        sound_period = np.hstack((sound_period, np.abs(new)))
+        cycles += 1
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    rest_percentile = np.percentile(rest_period, 98)
+    sound_percentile = np.percentile(sound_period, 25)
+
+    return rest_percentile, sound_percentile
+
+
 def save_sequence(seq, prefix):
     seq.sort(key=operator.attrgetter('start'))
     mel = note_seq.protobuf.music_pb2.NoteSequence()
@@ -294,56 +344,56 @@ def save_sequence(seq, prefix):
     return mel
 
 
-CHUNK_DURATION = round(float(sys.argv[1]), 3)  # Defines chunk duration in sec
-SAMPLING_RATE = 44100  # Standard 44.1 kHz sampling rate
-CHUNKSIZE = int(CHUNK_DURATION*SAMPLING_RATE)  # Frames to capture in one chunk
-MIN_NOTE_SIZE = float(CHUNK_DURATION * 1.05)
-MIN_VOLUME = round(float(sys.argv[2]))
-REST_THRESHOLD = .5 * MIN_VOLUME
-MIN_REST = .05
+def listen_and_extend(chunk_duration, min_volume, min_rest, rest_threshold,
+                      mel_min=4, rest_max=3, sampling_rate=44100):
+    chunksize = int(chunk_duration*sampling_rate)
+    min_note_size = float(chunk_duration * 1.05)
 
-p = pyaudio.PyAudio()  # Initialize PyAudio object
+    p = pyaudio.PyAudio()  # Initialize PyAudio object
 
-print(f"Recording audio in {CHUNK_DURATION} second chunks.")
-input("Press enter to proceed.")
+    print(f"Recording audio in {chunk_duration} second chunks.")
+    input("Press enter to proceed.")
 
-# Open stream with standard parameters
-stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE,
-                input=True, frames_per_buffer=CHUNKSIZE)
+    # Open stream with standard parameters
+    stream = p.open(format=pyaudio.paInt16, channels=1, rate=sampling_rate,
+                    input=True, frames_per_buffer=chunksize)
 
-# Run 4 processing steps: condense octaves, smooth repeats, remove errors, add rests
-pre_seq, full_raw = find_melody(CHUNKSIZE, CHUNK_DURATION, SAMPLING_RATE,
-                                noise_min=MIN_VOLUME)
-oct_seq = condense_octaves(copy.deepcopy(pre_seq))
+    # Run 4 processing steps: condense octaves, smooth repeats, remove errors, add rests
+    pre_seq, full_raw = find_melody(chunksize, chunk_duration, sampling_rate,
+                                    min_volume, stream)
+    oct_seq = condense_octaves(copy.deepcopy(pre_seq))
 
-res = process_MIDI(copy.deepcopy(oct_seq), MIN_NOTE_SIZE)
-while not res[1]:
-    res = process_MIDI(res[0], MIN_NOTE_SIZE)
-final_seq = res[0]
+    res = process_MIDI(copy.deepcopy(oct_seq), min_note_size)
+    while not res[1]:
+        res = process_MIDI(res[0], min_note_size)
+    final_seq = res[0]
 
-samp_rest = find_rests(full_raw, REST_THRESHOLD)
-sec_rests = [(round(tup[0]/SAMPLING_RATE, 2), round(tup[1]/SAMPLING_RATE, 2))
-            for tup in samp_rest]
-sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > MIN_REST]
+    samp_rest = find_rests(full_raw, rest_threshold)
+    sec_rests = [(round(tup[0]/sampling_rate, 2),
+                 round(tup[1]/sampling_rate, 2)) for tup in samp_rest]
+    sec_rests = [tup for tup in sec_rests if tup[1] - tup[0] > min_rest]
 
-rest_seq = []
-for note in final_seq:
-    rest_seq = note.add_rests(sec_rests, rest_seq)
+    rest_seq = []
+    for note in final_seq:
+        rest_seq = note.add_rests(sec_rests, rest_seq)
 
-# Cleanup
-stream.stop_stream()
-stream.close()
-p.terminate()
+    # Cleanup
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
-# Plots the waveform and saves the result
-plt.plot(full_raw)
-plt.axhline(MIN_VOLUME, color='r')
-plt.axhline(-MIN_VOLUME, color='r')
-plt.title("Raw Microphone Input")
-plt.savefig("Output/Waveform.png")
+    # Plots the waveform and saves the result
+    plt.plot(full_raw)
+    plt.axhline(min_volume, color='r')
+    plt.axhline(-min_volume, color='r')
+    plt.title("Raw Microphone Input")
+    plt.savefig("Output/Waveform.png")
 
-# Save MIDI plots and MIDI files
-save_sequence(pre_seq, 'pre')
-save_sequence(oct_seq, 'oct')
-save_sequence(final_seq, 'post')
-rest_mel = save_sequence(rest_seq, 'rest')
+    # Save MIDI plots and MIDI files
+    save_sequence(pre_seq, 'pre')
+    save_sequence(oct_seq, 'oct')
+    save_sequence(final_seq, 'post')
+    rest_mel = save_sequence(rest_seq, 'rest')
+
+final_rest, min_volume = melody_extension.calibrate()
+melody_extension.listen_and_extend(.15, min_volume, .1, final_rest)
