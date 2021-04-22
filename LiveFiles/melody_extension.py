@@ -330,7 +330,7 @@ def calibrate(chunksize=2056, sampling_rate=44100, test_period=10):
     p.terminate()
 
     rest_percentile = np.percentile(rest_period, 98)
-    sound_percentile = np.percentile(sound_period, 25)
+    sound_percentile = np.percentile(sound_period, 50)
 
     return rest_percentile, sound_percentile
 
