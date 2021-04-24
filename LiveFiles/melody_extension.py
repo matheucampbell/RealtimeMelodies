@@ -414,14 +414,15 @@ def listen_and_extend(chunk_duration, min_volume, min_rest, rest_threshold,
     qpm = rest_mel.tempos[0].qpm
     seconds_per_step = 60.0 / qpm / melody_rnn.steps_per_quarter
     steps = ((rest_mel.total_time * qpm * melody_rnn.steps_per_quarter)/60)
+    total = steps * seconds_per_step
     tmp = 1.0
 
     # Initialize Generator
     gen_options = generator_pb2.GeneratorOptions()
     gen_options.args['temperature'].float_value = tmp
-    gen_section = gen_options.generate_sections.add(start_time=rest_seq[-1].end,
-                                                    end_time=(rest_seq[-1].end -
-                                                    rest_seq[1].start) * 2)
+    gen_section = gen_options.generate_sections.add(start_time=end_time + 
+                                                    seconds_per_step,
+                                                    end_time=total)
 
     out = melody_rnn.generate(rest_mel, gen_options)
 
