@@ -5,6 +5,7 @@ print("Starting realtime melody generation. First, calibrate the program.")
 active = True
 final_rest, min_volume = melody_extension.calibrate()
 
+
 def extend(min_volume, final_rest):
     melody_extension.listen_and_extend(.15, min_volume, .1, final_rest)
     print(f"Calibrated.\nRest Threshold: {final_rest}" +
