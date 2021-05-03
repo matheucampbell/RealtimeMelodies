@@ -37,6 +37,7 @@ class Note:  # Note object to store input for note_seq
 
     def add_rests(self, rest_list, output_seq):
         new_notes = []
+        # Filter list of all rests for those that intersect with the note
         rests = [rest for rest in rest_list if
                  self.start <= rest[0] <= self.end or
                  self.start <= rest[1] <= self.end or
