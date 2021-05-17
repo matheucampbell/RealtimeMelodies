@@ -1,14 +1,17 @@
 import sympy as sym
+import numpy as np
 
 x, y, z = sym.symbols('x y z')
+f, g = sym.symbols('target interpreted', cls=sym.Function)
 
 trg = ((65, 0, 2.3), (63, 2.3, 3.1), (60, 3.1, 3.9))
-terp = ((64, 0, 1.7), (65, 1.7, 2.3), (63, 2.3, 2.8), (60, 3.1, 3.9))
+terp = ((64, 0, 1.7), (65, 1.7, 2.3), (63, 2.3, 2.8), (60, 2.8, 3.9))
 
-funcs = ((note[0], sym.And(note[1]<=x, x<note[2])) for note in trg)
+trg_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in trg]
+terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
 
-(val, cond) = next(funcs)
-trg_pce = sym.Piecewise((val, cond), (y, z))
+f = sym.Piecewise(*trg_funcs)
+g = sym.Piecewise(*terp_funcs)
 
-while (interval := next(funcs, None)):
-    trg_pce = trg_pce.subs([(y, interval[0]), (z, interval[1])])
+res = sym.integrate(np.abs(f - g), (x, 0, 3.9)) / 3.9
+print(res)
