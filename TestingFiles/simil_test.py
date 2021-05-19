@@ -1,7 +1,7 @@
 import sympy as sym
 import numpy as np
 
-from sympy.calculus.singularities import singularities
+from sympy import solveset, S
 
 x, y, z = sym.symbols('x y z')
 f, g = sym.symbols('target interpreted', cls=sym.Function)
@@ -15,21 +15,24 @@ terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
 f = sym.Piecewise(*trg_funcs)
 g = sym.Piecewise(*terp_funcs)
 
-res = sym.integrate(np.abs(f - g), (x, 0, 3.9)) / 3.9
-print(res)
+sol = solveset(f/g, x, S.Reals)
+print(sol)
+
 
 def check_cont(f1, f2, y):  # XOR for two given functions for a given x
     if bool(f1.subs(x, y) == sym.nan) != bool(f2.subs(x, y) == sym.nan):
-        return True, y
+        print(f1.subs(x, y))
+        print(f2.subs(x, y))
+        return y
     else:
-        return False, -1
-
+        return None
+    
 def find_disconts(f1, f2, end):
     values = []
-    for x_val in range(0, end, .001):
+    for x_val in range(0, int(end)):
         if check_cont(f1, f2, x_val):
             values.append(x_val)
     return values
 
-print(find_disconts(f, g, trg[-1][2]))
 
+res = sym.integrate(np.abs(f - g), (x, 0, 3.9)) / 3.9
