@@ -1,8 +1,6 @@
 import sympy as sym
 import numpy as np
 
-from sympy import solveset, S
-
 x, y, z = sym.symbols('x y z')
 f, g = sym.symbols('target interpreted', cls=sym.Function)
 
@@ -15,24 +13,42 @@ terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
 f = sym.Piecewise(*trg_funcs)
 g = sym.Piecewise(*terp_funcs)
 
-sol = solveset(f/g, x, S.Reals)
-print(sol)
-
 
 def check_cont(f1, f2, y):  # XOR for two given functions for a given x
     if bool(f1.subs(x, y) == sym.nan) != bool(f2.subs(x, y) == sym.nan):
-        print(f1.subs(x, y))
-        print(f2.subs(x, y))
         return y
     else:
         return None
+
     
 def find_disconts(f1, f2, end):
     values = []
-    for x_val in range(0, int(end)):
+    for x_val in np.arange(0, end + .01, .01):
         if check_cont(f1, f2, x_val):
-            values.append(x_val)
+            values.append(round(x_val, 3))
     return values
 
+
+def convert_to_intervals(points):
+    end = 0
+    ret = []
+    while len(points):
+        if round(points[end] - points[0], 2) == end/100 and \
+           end != len(points) - 1:
+            end += 1
+        elif end == len(points) - 1:
+            ret.append(points[0:end + 1])
+            del points[0:end + 1]
+        else:
+            ret.append(points[0:end])
+            del points[0:end]
+            end = 0
+
+    ret = [(ls[0], ls[-1]) for ls in ret]
+
+    return ret
+    
+vals = find_disconts(f, g, trg[-1][2])
+print(convert_to_intervals(vals))
 
 res = sym.integrate(np.abs(f - g), (x, 0, 3.9)) / 3.9
