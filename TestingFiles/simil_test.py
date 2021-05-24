@@ -1,8 +1,6 @@
 import sympy as sym
 import numpy as np
 
-from sympy import solveset, S
-
 x, y, z = sym.symbols('x y z')
 f, g = sym.symbols('target interpreted', cls=sym.Function)
 
@@ -55,13 +53,20 @@ def convert_to_intervals(points):
 vals = find_disconts(f, g, trg[-1][2])
 int_vals = convert_to_intervals(vals)
 
-total = 0
-for spc in int_vals:
-    total += sym.integrate(np.abs(f - g), (x, spc[0], spc[1]))
+val_form = sym.Union(*[sym.Interval(spc[0], spc[1]) for spc in int_vals])
+full_domain = sym.Interval(0, trg[-1][1])
+final_domain = full_domain - val_form
 
-domain_total = sum([spc[1] - spc[0] for spc in int_vals])
-avg = total / domain_total
+print(final_domain)
 
-print(avg)
-res = sym.integrate(np.abs(f - g), (x, 0, 3.9)) / 3.9
-print(res)
+if int_vals:
+    cont_domain = sum([spc[1] - spc[0] for spc in int_vals])
+
+    total = 0
+    for spc in int_vals:
+        total += sym.integrate(np.abs(f - g), (x, spc[0], spc[1]))
+    mu = total/cont_domain
+else:
+    mu = sym.integrate(np.abs(f - g), (x, 0, trg[-1][1])) / trg[-1][1]
+
+print(mu)
