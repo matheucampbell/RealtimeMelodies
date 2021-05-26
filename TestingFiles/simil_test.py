@@ -4,8 +4,8 @@ import numpy as np
 x, y, z = sym.symbols('x y z')
 f, g = sym.symbols('target interpreted', cls=sym.Function)
 
-trg = ((65, 0, 1.2), (63, 1.2, 3.1), (60, 3.1, 3.9))
-terp = ((64, 0, 1.7), (65, 1.7, 2.3), (63, 2.3, 2.8), (60, 2.8, 3.9))
+trg = ((60, 0, 1), (65, 2, 4))
+terp = ((60, 0, 2), (65, 2, 4))
 
 trg_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in trg]
 terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
@@ -14,7 +14,8 @@ f = sym.Piecewise(*trg_funcs)
 g = sym.Piecewise(*terp_funcs)
 
 
-def check_cont(f1, f2, y):  # XOR for two given functions for a given x
+def check_cont(f1, f2, y):
+    # XOR for two given functions for a given x
     if bool(f1.subs(x, y) == sym.nan) != bool(f2.subs(x, y) == sym.nan):
         return y
     elif f1.subs(x, y) == sym.nan and f2.subs(x, y) == sym.nan:
@@ -46,25 +47,29 @@ def convert_to_intervals(points):
             del points[0:end]
             end = 0
 
-    ret = [(ls[0], ls[-1]) for ls in ret]
+    ret = [((ls[0] - .01), (ls[-1] + .01)) for ls in ret]
 
     return ret
     
-vals = find_disconts(f, g, trg[-1][2])
-int_vals = convert_to_intervals(vals)
+vals = find_disconts(f, g, trg[-1][2])  # List of all points of discontinuity
+int_vals = convert_to_intervals(vals)  # List form intervals of discontinuity
 
+# Interval form discontinuities
 val_form = sym.Union(*[sym.Interval(spc[0], spc[1]) for spc in int_vals])
-full_domain = sym.Interval(0, trg[-1][1])
+full_domain = sym.Interval(0, trg[-1][2])
 final_domain = full_domain - val_form
 
-print(final_domain)
+print(val_form, full_domain, final_domain)
 
 if int_vals:
-    cont_domain = sum([spc[1] - spc[0] for spc in int_vals])
+    discont_domain = sum([spc[1] - spc[0] for spc in int_vals])
+    total_length = trg[-1][2]
+    cont_domain = total_length - discont_domain
 
     total = 0
-    for spc in int_vals:
-        total += sym.integrate(np.abs(f - g), (x, spc[0], spc[1]))
+    for sub in final_domain.args:
+        total += sym.integrate(np.abs(f - g), (x, sub.left, sub.right))
+
     mu = total/cont_domain
 else:
     mu = sym.integrate(np.abs(f - g), (x, 0, trg[-1][1])) / trg[-1][1]
