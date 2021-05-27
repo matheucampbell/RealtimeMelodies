@@ -1,11 +1,11 @@
 import sympy as sym
 import numpy as np
 
-x, y, z = sym.symbols('x y z')
+x, y = sym.symbols('x y')
 f, g = sym.symbols('target interpreted', cls=sym.Function)
 
-trg = ((60, 0, 1), (65, 2, 4))
-terp = ((60, 0, 2), (65, 2, 4))
+trg = ((55, 0, 1.3), (64, 1.3, 2.4), (66, 2.8, 4.9))
+terp = ((64, 0, 0.9), (66, 1.2, 2.4), (66, 3.6, 4.9))
 
 trg_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in trg]
 terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
@@ -47,7 +47,7 @@ def convert_to_intervals(points):
             del points[0:end]
             end = 0
 
-    ret = [((ls[0] - .01), (ls[-1] + .01)) for ls in ret]
+    ret = [(round((ls[0] - .01), 2), round((ls[-1] + .01), 2)) for ls in ret]
 
     return ret
     
@@ -59,13 +59,11 @@ val_form = sym.Union(*[sym.Interval(spc[0], spc[1]) for spc in int_vals])
 full_domain = sym.Interval(0, trg[-1][2])
 final_domain = full_domain - val_form
 
-print(val_form, full_domain, final_domain)
-
 if int_vals:
     discont_domain = sum([spc[1] - spc[0] for spc in int_vals])
     total_length = trg[-1][2]
     cont_domain = total_length - discont_domain
-
+    
     total = 0
     for sub in final_domain.args:
         total += sym.integrate(np.abs(f - g), (x, sub.left, sub.right))
@@ -74,4 +72,4 @@ if int_vals:
 else:
     mu = sym.integrate(np.abs(f - g), (x, 0, trg[-1][1])) / trg[-1][1]
 
-print(mu)
+print(f"μ = {mu}")
