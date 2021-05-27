@@ -1,9 +1,17 @@
+import note_seq
 import numpy as np
+import operator
 import sympy as sym
 import sys
 
 targ, inter = sys.argv[1], sys.argv[2]
-# MIDI to note sequence function
+
+targ_seq = note_seq.midi_file_to_note_sequence(targ)
+inter_seq = note_seq.midi_file_to_note_sequence(inter)
+
+fin_targ = [(note.pitch, note.start_time, note.end_time) for note in targ_seq.notes]
+fin_inter = [(note.pitch, note.start_time, note.end_time) for note in inter_seq.notes]
+
 # Note sequence to list of Notes function
 final_mu = compare_sequences(targ, inter)
 
@@ -14,7 +22,7 @@ def compare_sequences(target, interpreted):  # Calculate average difference in s
 
     # Target/Interpreted are lists of Note objects
     trg = [(note.midi, note.start, note.end) for note in target]
-    terp = [(note.midi note.start, note.end) for note in interpreted]
+    terp = [(note.midi, note.start, note.end) for note in interpreted]
 
     trg_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in trg]
     terp_funcs = [(note[0], sym.And(note[1] <= x, x <= note[2])) for note in terp]
